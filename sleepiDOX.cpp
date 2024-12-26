@@ -38,7 +38,7 @@ inline std::string& rltrim(std::string& str) {
 
 inline std::string& comment_trim(std::string& str) {
     rltrim(str);        
-    if (str.at(0) != '/' && ( str.at(1) == '*' || str.at(1) == '/') )
+    if (str.at(0) == '/' && ( str.at(1) == '*' || str.at(1) == '/') )
         str.erase(0, 2);
     return str;
 }
@@ -108,9 +108,10 @@ std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line)
     if (last_read_line.length() > 8) {
 
         // Remove everything up to (possible) end of the comment
-        const size_t comment_index = last_read_line.find_first_of('\\');
-        if (comment_index != std::string::npos)
-            last_read_line.erase(0, comment_index);
+        const size_t comment_index = last_read_line.find_first_of('/');
+        if (comment_index != std::string::npos) {
+            last_read_line.erase(0, comment_index + 1);
+        }
 
         // Remove everything up to a possible comment - will fuck up if there is a param with a default value that contains "/".
         // FIXME : CHANGE THIS TO NOT ERASE DEFAULT PARAMS
@@ -142,17 +143,31 @@ std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line)
 bool isLineCommented(const std::string& line) {
     static bool is_multiline = false;
     std::string copy = line;
-    ltrim(copy);
+    rltrim(copy);
 
-    if (copy.at(0) != '/' || copy.at(0) == '*')
-        return is_multiline;
-    else if (copy.at(1) == '*') {
-        is_multiline = true;
+    if (copy.at(0) == '/') {
+        if (copy.at(1) == '*') {
+            is_multiline = true;
+            return true;
+        }
+        else if (copy.at(1) == '/')
+            return true;
+    }
+    // If the very start or end of the line are ends of multiline comments
+    if ( copy.at(copy.size() - 2) == '*' && copy.back() == '/' ) {
+        is_multiline = false;
         return true;
     }
-    else if (copy.at(1) == '/')
-        return true;
 
+    // If line doesn't contain any tokens due to it being in a multiline:
+    if (copy.find_first_not_of("/*") == 0)
+        return is_multiline;
+
+
+    // If we've reached this spot, this means that there is a multiline comment
+    // that does not have its multiline end token at the end of the line
+    // Thus there must be code beyond it
+    is_multiline = false;
     return false;
 }
 
@@ -208,24 +223,23 @@ int main(int args, const char* argv[]) {
 
         // DETERMINE WHETHER OR NOT LINE STARTS OR ENDS COMMENT
         const bool commented_line = isLineCommented(line);
+        DOXEntry entry;
         if (commented_line) {
-            std::cout << "ENTRY STUFF: " << comment_trim(line) + '\n';
-            //entries.at(entry_index).functionality.entry += comment_trim(line) + '\n';
+            /*std::cout << "ENTRY STUFF: " << comment_trim(line) + '\n';*/
+            entry.functionality.entry += comment_trim(line) + '\n';
         }
         // This line is not a comment, so therefore must be tokenized
         else {
             std::string funcdecl = extractFunctionDecl(file, line);
             std::cout << "FUNCTION DECLARATION: " << funcdecl << "\n";
+
+
+
+            
+            ++entry_index;
         }
 
-        
-        /*const std::vector<std::string> tokens = tokenizeLine(line);
-
-
-        std::cout << "[\"" << tokens.at(0) << "\"";
-        for (int i = 1; i < tokens.size(); ++i) {
-            std::cout << ", \"" << tokens.at(i) << "\"";
-        }
-        std::cout << "]\n";*/
+        entries.push_back(entry);
     }
+    std::cout << "Finsihed!";
 }
