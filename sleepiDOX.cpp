@@ -58,6 +58,17 @@ std::vector<std::string> tokenizeLine(const std::string& line)
     return tokens;
 }
 
+// Checks whether `str` contains every character in `chars` in the order provided.
+// Returns true if so.
+inline bool containsInOrder(const std::string& str, const std::string& chars) {
+    size_t last_pos = 0;
+    return std::none_of(chars.cbegin(), chars.cend(), [&str, &last_pos](char ch) {
+        last_pos = str.find(ch, last_pos);
+        return last_pos == std::string::npos;
+    });
+ 
+}
+
 std::string getline(std::ifstream& file) {
     const int LINE_LENGTH = 256;
     char cline[LINE_LENGTH];
@@ -67,8 +78,8 @@ std::string getline(std::ifstream& file) {
 }
 
 
-// The line is passed in, because it has already been read, hence it's a line that might contain function definition
-std::vector<std::string>& tokenizeFunctionDecl(std::ifstream& file, const std::string& line) {
+
+std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line) {
     // Functions can have varying signatures, templates almost encouraging multiline delcarations makes this annoying
     // Signarutes can be as simple as:
     // return-type functionName() {
@@ -78,11 +89,54 @@ std::vector<std::string>& tokenizeFunctionDecl(std::ifstream& file, const std::s
     // return-type<...> functionName( prefix type name1,
     //                                prefix type name2, ...) additional {
     // Hence there will be a lot of annoying stuff
+
+    // The line is passed in, because it could possibly contain a function definintion. Example:
+    // "/*
+    // ...
+    // *\ void fn() {"
     
 
     // For now, this function will only work without any definitions or C++17 attributes
 
+    // Determine whether the previously read line contains a function definiton:
+    // The shortest possible function is "_ z(){", so the line must contain at least 8 characters (accounting for "*\")
+    // [TECHNICALLY]: it can be one character if #defined, but that's stupid, and I won't adjust my code for that.
+    // If you #define an entire declaration, and expect this to auto-document - you stupid as hell. Make a custom entry for that...
 
+    std::string function_def;
+    bool not_full_decl = false;
+    if (last_read_line.length() > 8) {
+
+        // Remove everything up to (possible) end of the comment
+        const size_t comment_index = last_read_line.find_first_of('\\');
+        if (comment_index != std::string::npos)
+            last_read_line.erase(0, comment_index);
+
+        // Remove everything up to a possible comment - will fuck up if there is a param with a default value that contains "/".
+        // FIXME : CHANGE THIS TO NOT ERASE DEFAULT PARAMS
+        const size_t end_comment_index = last_read_line.find_last_of('/');
+        if (end_comment_index != std::string::npos)
+            last_read_line.erase(end_comment_index);
+
+        // Now gotta check if there is a complete function declaration
+        not_full_decl = !containsInOrder(last_read_line, "()");
+        function_def = last_read_line;
+    }
+    // Otherwise, we just gotta keep reading stupid empty lines until we encounter enough substance to classify it as a function definition
+    while (true && not_full_decl) {
+        std::string line = getline(file);
+        function_def.append(rltrim(line) + ' ');
+
+        // The only way to be sure it's a function def. is by checking for "... (...)"
+        if (containsInOrder(function_def, "()")) {
+            break;
+        }
+    }
+
+    // Minor cleanup
+    function_def.erase(function_def.find_last_of(")") + 1);
+    rltrim(function_def);
+    return function_def;
 }
 
 bool isLineCommented(const std::string& line) {
@@ -144,9 +198,6 @@ int main(int args, const char* argv[]) {
     }
     auto file = openReadFile(filename);
 
-
-    
-    ;
     std::vector<DOXEntry> entries;
     int entry_index = 0;
 
@@ -155,23 +206,26 @@ int main(int args, const char* argv[]) {
         // READ THE LINE AND TRIM
         std::string line = getline(file);
 
+        // DETERMINE WHETHER OR NOT LINE STARTS OR ENDS COMMENT
         const bool commented_line = isLineCommented(line);
         if (commented_line) {
-            entries.at(entry_index).functionality.entry += comment_trim(line) + '\n';
+            std::cout << "ENTRY STUFF: " << comment_trim(line) + '\n';
+            //entries.at(entry_index).functionality.entry += comment_trim(line) + '\n';
         }
         // This line is not a comment, so therefore must be tokenized
         else {
-            auto tokens = tokenizeFunctionDecl(file, line);
+            std::string funcdecl = extractFunctionDecl(file, line);
+            std::cout << "FUNCTION DECLARATION: " << funcdecl << "\n";
         }
 
-        // DETERMINE WHETHER OR NOT LINE STARTS OR ENDS COMMENT
-        const std::vector<std::string> tokens = tokenizeLine(line);
+        
+        /*const std::vector<std::string> tokens = tokenizeLine(line);
 
 
         std::cout << "[\"" << tokens.at(0) << "\"";
         for (int i = 1; i < tokens.size(); ++i) {
             std::cout << ", \"" << tokens.at(i) << "\"";
         }
-        std::cout << "]\n";
+        std::cout << "]\n";*/
     }
 }
