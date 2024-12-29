@@ -24,13 +24,6 @@ struct DOXEntry {
 
 std::ifstream openReadFile(const char* fileName);
 std::ofstream openWriteFile(const char* fileName);
-
-std::vector<std::string> tokenizeLine(const std::string& line);
-void appendReturn(std::ofstream& file, const std::string& line);
-void appendParams(std::ofstream& file, const std::string& line);
-
-
-
 	/*
 	*   How this will work - sleepiDOX will scan each line of every file provided.
 	*	It will look for "keys", the main one will be "@sleepiDOX"

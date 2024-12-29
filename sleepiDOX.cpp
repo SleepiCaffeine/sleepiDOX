@@ -38,12 +38,32 @@ inline std::string& rltrim(std::string& str) {
 }
 
 inline std::string& comment_trim(std::string& str) {
-    rltrim(str);        
-    if (str.at(0) == '/' && ( str.at(1) == '*' || str.at(1) == '/') )
+    str = rltrim(str);
+    const size_t token_index = str.find("@sleepiDOX");
+    if (token_index != std::string::npos) {
+        str.erase(token_index, 11);
+    }
+
+    if (str.size() < 2) {
+        return str;
+    }
+
+    // Annoying way of deleting slashes
+    // This way I don't have to rltrim(str) after
+    if (str.at(0) == '/') {
+        if (str.at(1) == '/') {
+            str.erase(0, str.find_first_not_of("/ ", 1));
+        }
+        else if (str.at(1) == '*') {
+            str.erase(0, str.find_first_not_of("* ", 1));
+        }
+    }
+    
+    if (str.at(0) == '*' && str.at(1) == '/') {
         str.erase(0, 2);
+    }
     return str;
 }
-
 
 // Checks whether `str` contains every character in `chars` in the order provided.
 // Returns true if so.
@@ -64,7 +84,81 @@ std::string getline(std::ifstream& file) {
     return rtrim(line);
 }
 
+// Tokenizes funciton declaration, modifies passed in integer to show which
+// index points to function name (useful for when there are multiple templates beforehand)
+std::vector<std::string> tokenizeFunction(const std::string& declaration, int& indexToFunctionName) {
+    const size_t idxOfParen = declaration.find_first_of('(');
+    // This is mainly to catch bugs easier, have no clue how this could be triggered
+    // Other than a syntax error within the file itself.
+    if (idxOfParen == std::string::npos) {
+        throw std::logic_error("Function \"" + declaration + "\" does not have an opening paretheses!");
+    }
 
+    // Divide the string into 2 parts: [ ... ( ][ ..., ..., ...) ]
+    // This way, the first part has the function name, and return type (at least in C-style languages)
+    // Whereas the second part has all the parameters
+
+    auto firstHalfEndIterator = declaration.cbegin();
+    std::advance(firstHalfEndIterator, idxOfParen);
+
+    std::string firstPart(declaration.cbegin(), firstHalfEndIterator);
+    std::string secondPart(++firstHalfEndIterator, declaration.cend());
+
+
+    std::istringstream firstStream(firstPart);
+    std::vector<std::string> tokens;
+
+    std::string syntaxSugar = "<>{}()[]";
+    // Tokenize the return value and function name
+    while (!firstStream.eof()) {
+        std::string temp;
+        firstStream >> temp;
+
+        // Since it is not a syntax errror to write something along the lines of " std::map < std::string , std::complex >
+        // The parser should be able to accomodate such writing styles
+        if (temp.find_first_of(syntaxSugar) != std::string::npos) { tokens.back().append(temp); }
+        if (temp == ",") { continue; }
+        else if (temp.find(',') != std::string::npos) {
+            temp.erase(temp.find(','));
+            tokens.push_back(temp);
+        }
+        else { tokens.push_back(temp); }
+    }
+    indexToFunctionName = tokens.size() - 1;
+
+    std::istringstream secondStream(secondPart);
+    // Now to do the same to the parameters
+    while (!secondStream.eof()) {
+        std::string temp;
+        secondStream >> temp;
+
+        // Since it is not a syntax errror to write something along the lines of " std::map < std::string , std::complex >
+        // The parser should be able to accomodate such writing styles
+        
+        if (temp.find_first_of(syntaxSugar) != std::string::npos) {
+            tokens.back().append(temp);
+            continue;
+        }
+        if (temp == ",") { continue; }
+        else if (temp.find(',') != std::string::npos) {
+            temp.erase(temp.find(','));
+            tokens.push_back(temp);
+        }
+        else { tokens.push_back(temp); }
+    }
+
+    return tokens;
+}
+
+
+template <typename T>
+void printVector(const std::vector<T>& vec) noexcept {
+    std::cout << "[\"";
+    for (size_t i = 0; i < vec.size() - 1; ++i) {
+        std::cout <<  vec.at(i) << "\", \"";
+    }
+    std::cout << vec.back() << "\"]";
+}
 
 
 std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line) {
@@ -92,7 +186,7 @@ std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line)
     // If you #define an entire declaration, and expect this to auto-document - you stupid as hell. Make a custom entry for that...
 
     std::string function_def;
-    bool not_full_decl = false;
+    bool not_full_decl = true;
     if (last_read_line.length() > 8) {
 
         // Remove everything up to (possible) end of the comment
@@ -112,18 +206,19 @@ std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line)
         function_def = last_read_line;
     }
     // Otherwise, we just gotta keep reading stupid empty lines until we encounter enough substance to classify it as a function definition
-    while (true && not_full_decl) {
+    while (not_full_decl) {
         std::string line = getline(file);
         function_def.append(rltrim(line) + ' ');
 
         // The only way to be sure it's a function def. is by checking for "... (...)"
+        // This could fail if there is a function call as a default parameter
         if (containsInOrder(function_def, "()")) {
             break;
         }
     }
 
     // Minor cleanup
-    function_def.erase(function_def.find_last_of(")") + 1);
+    function_def.erase(function_def.find_last_of(")"));
     rltrim(function_def);
     return function_def;
 }
@@ -132,6 +227,11 @@ bool isLineCommented(const std::string& line) {
     static bool is_multiline = false;
     std::string copy = line;
     rltrim(copy);
+
+    if (copy.size() < 2) {
+        return is_multiline;
+    }
+
 
     if (copy.at(0) == '/') {
         if (copy.at(1) == '*') {
@@ -142,7 +242,7 @@ bool isLineCommented(const std::string& line) {
             return true;
     }
     // If the very start or end of the line are ends of multiline comments
-    if ( copy.at(copy.size() - 2) == '*' && copy.back() == '/' ) {
+    if (copy.at(copy.size() - 2) == '*' && copy.back() == '/') {
         is_multiline = false;
         return true;
     }
@@ -205,6 +305,49 @@ bool extractArguments(const int& args, const char* argv[], std::string& rfile, s
 }
 
 
+void generateDocFile(std::ofstream& output_file, const std::unordered_map<std::string, std::vector<DOXEntry>>& entries) {
+    /*
+    Step 1: Make a table of contents, which will have links to every function definition
+    Step 2: For every function - add a header that has the function name
+    Step 3: Create the entry:
+        3.1: How to call the function (Comment block)
+        3.2: Comment description  ( ### Description \n comment)
+        3.3: Parameters (Each with heading level 4)
+        3.4: Return value (### Returns \n ...)
+    Step 4: Separate with a "- - -"
+    Step 5: Repeat
+    */
+    output_file << "# Table of contents:\n";
+    for (const auto& [name, entry] : entries ) {
+        output_file << "- [" << name << "](#" << name << ")\n";
+    }
+
+    for (const auto& [name, entry] : entries) {
+        output_file << "## " << name << "()\n";
+        
+        for (const auto& entry_details : entry) {
+            output_file << "```" << entry_details.full_signature << ")```\n";
+            output_file << "### Description:\n" << entry_details.paragraphs.at(ENTRY_COMMENT);
+
+            // Ehhhhhhhhhhhhhhhhhhhhhhhh
+            // Should rewrite this, so that params is also an array
+            // temporary to make an MVP
+            if (!entry_details.paragraphs.at(ENTRY_PARAMS).empty()) {
+                output_file << "### Params:\n";
+                output_file << entry_details.paragraphs.at(ENTRY_PARAMS);
+            }
+
+            if (!entry_details.paragraphs.at(ENTRY_RETURNS).empty()) {
+                output_file << "### Returns:\n";
+                output_file << entry_details.paragraphs.at(ENTRY_RETURNS);
+            }
+
+            output_file << "\n";
+        }
+    }
+    output_file << "- - -\n";
+}
+
 int main(const int args, const char* argv[]) {
     // PARSE ARGUMENTS
     std::string rfilename, wfilename;
@@ -213,45 +356,50 @@ int main(const int args, const char* argv[]) {
     }
 
     // OPEN READ FILE
-    if (rfilename.empty()) {
-        std::cout << "No File opened.\n";
-        return EXIT_FAILURE;
-    }
-
     std::ifstream rfile = openReadFile(rfilename.c_str());
 
-
-    
     std::unordered_map<std::string, std::vector<DOXEntry>> entries;
-    int entry_index = 0;
 
     // READ THE FILE LINE BY LINE
+    DOXEntry entry;
     while (!rfile.eof()) {
         // READ THE LINE AND TRIM
         std::string line = getline(rfile);
 
+        // Adding this just so it wouldn't add a bunch of newlines
+        // Just because of these characters
+        if (line == "\\*" || line == "/*")
+            continue;
+
         // DETERMINE WHETHER OR NOT LINE CONTAINS A COMMENT
         const bool commented_line = isLineCommented(line);
-        DOXEntry entry;
+        
         if (commented_line) {
-            entry.paragraphs.at(ENTRY_COMMENT) += comment_trim(line) + '\n';
+            entry.paragraphs.at(ENTRY_COMMENT) += comment_trim(line) + "\n\n";
         }
         // This line is not a comment, so therefore there is a function declaration
         else {
-            std::string funcdecl = extractFunctionDecl(rfile, line);
-            entry.paragraphs.at(ENTRY_FUNCTION_NAME) = funcdecl;
+            const std::string funcdecl = extractFunctionDecl(rfile, line);
+            entry.full_signature = funcdecl;
 
             int functionNameIndex = 0;
-            //std::vector<std::string> functionTokens = tokenizeFunction(funcdecl, functionNameIndex);
+            const std::vector<std::string> functionTokens = tokenizeFunction(funcdecl, functionNameIndex);
+            entry.paragraphs.at(ENTRY_FUNCTION_NAME) = functionTokens.at(functionNameIndex);
 
+            entries[entry.paragraphs.at(ENTRY_FUNCTION_NAME)].push_back(entry);
 
-            ++entry_index;
-            entries[funcdecl].push_back(entry);
-        }
+            // Reset the container
+            entry = {};
 
-        //  
-
-        
+            // Everything before functionNameIndex is the return value
+            // Everything after are parameters. Only needed if @DOXParam / @DOXReturns are used
+        }  
     }
+
+    // At this point, the entire file should've been read, and processed accordingly.
+    std::ofstream writeFile = openWriteFile(wfilename.c_str());
+
+    generateDocFile(writeFile, entries);
+
     std::cout << "Finsihed!";
 }
