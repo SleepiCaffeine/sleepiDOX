@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm> 
+#include <unordered_map>
 
 std::ifstream openReadFile(const char* fileName)
 {
@@ -43,20 +44,6 @@ inline std::string& comment_trim(std::string& str) {
     return str;
 }
 
-std::vector<std::string> tokenizeLine(const std::string& line)
-{
-    std::istringstream iss(line);
-    std::vector<std::string> tokens;
-    while (!iss.eof()) {
-        std::string temp;
-        iss >> temp;
-        if (temp == "//" || temp == "/*" || (temp == "*" && tokens.empty()))
-            continue;
-
-        tokens.push_back(temp);
-    }
-    return tokens;
-}
 
 // Checks whether `str` contains every character in `chars` in the order provided.
 // Returns true if so.
@@ -76,6 +63,7 @@ std::string getline(std::ifstream& file) {
     std::string line(cline);
     return rtrim(line);
 }
+
 
 
 
@@ -171,75 +159,99 @@ bool isLineCommented(const std::string& line) {
     return false;
 }
 
-DOXFragment populateFragment(const FragmentKey  key)
-{
-    switch (key) {
-    case FragmentKey::Returns:
-        return DOXFragment{ FragmentKey::Returns , 2, "" };
-        break;
-    case FragmentKey::Functionality:
-        return DOXFragment{ FragmentKey::Functionality , 2, "" };
-        break;
-    case FragmentKey::Params:
-        return DOXFragment{ FragmentKey::Params , 2, "" };
-        break;
-    case FragmentKey::Warning:
-        return DOXFragment{ FragmentKey::Warning, 3, "" };
-        break;
-    case FragmentKey::TODO:
-        return DOXFragment{ FragmentKey::TODO, 4, "" };
-        break;
-    case FragmentKey::Custom:
-        return DOXFragment{ FragmentKey::Custom, 0, "" };
-        break;
+
+// Parses commandline arguments to find supplied read/write files. Will have to probably rewrite this to be more flexible
+// for future flags. 
+bool extractArguments(const int& args, const char* argv[], std::string& rfile, std::string& wfile) {
+    // Possible future flags:
+    // -fs  :   Parses entire folder for files
+    // -fe  :   Changes the file extension that is checked for (for example "-fe py" would look for .py files). Default it .h/.hpp
+    // -fea :   Adds to the list of file extensions to parse
+    // -dd  :   Destination directory (relative to executable)
+    // -xp  :   Would attempt to parse multiple files looking for things like #define's, "using"s, and such to find what things are defined as. [Most likely not]
+    
+    
+    if (args <= 4) {
+        std::cout << "You need to supply the file to parse with the flag \"-s\", and destination file with \"-d\"" << std::endl;
+        return false;
     }
+
+    bool have_rfile = false, have_wfile = false;
+    if (argv[1][0] != '-' || argv[3][0] != '-') {
+        std::cout << "You need to supply the file to parse with the flag \"-s\", and destination file with \"-d\"" << std::endl;
+        std::cout << "Found: \"" << argv[1] << "\", \"" << argv[3] << "\"" << std::endl;
+    }
+
+
+    if (argv[1][1] == 's' || argv[3][1] == 's') {
+        rfile = argv[2 + ((argv[1][1] == 's') ? 0 : 2)];
+    }
+    else {
+        std::cout << "No \"-s\" flag detected! Please reference the documentation for required flags.\n";
+        std::cout << "Found: \"" << argv[1] << "\", \"" << argv[3] << "\"" << std::endl;
+        return false;
+    }
+    if (argv[1][1] == 'd' || argv[3][1] == 'd') {
+        wfile = argv[2 + ((argv[1][1] == 'd') ? 0 : 2)];
+    }
+    else {
+        std::cout << "No \"-d\" flag detected! Please reference the documentation for required flags." << std::endl;
+        std::cout << "Found: \"" << argv[1] << "\", \"" << argv[3] << "\"" << std::endl;
+        return false;
+    }
+
+
+    return true;
 }
 
-const char* getFilename(int args, const char* argv[]) {
-    const int FILENAME_INDEX = 1;
-    if (args < FILENAME_INDEX)
-        return nullptr;
-    return argv[FILENAME_INDEX];
-}
 
+int main(const int args, const char* argv[]) {
+    // PARSE ARGUMENTS
+    std::string rfilename, wfilename;
+    if (extractArguments(args, argv, rfilename, wfilename) != true) {
+        return EXIT_FAILURE;
+    }
 
-
-int main(int args, const char* argv[]) {
-    // OPEN FILE
-    const char* filename = getFilename(args, argv);
-    if (filename == nullptr) {
+    // OPEN READ FILE
+    if (rfilename.empty()) {
         std::cout << "No File opened.\n";
         return EXIT_FAILURE;
     }
-    auto file = openReadFile(filename);
 
-    std::vector<DOXEntry> entries;
+    std::ifstream rfile = openReadFile(rfilename.c_str());
+
+
+    
+    std::unordered_map<std::string, std::vector<DOXEntry>> entries;
     int entry_index = 0;
 
     // READ THE FILE LINE BY LINE
-    while (!file.eof()) {
+    while (!rfile.eof()) {
         // READ THE LINE AND TRIM
-        std::string line = getline(file);
+        std::string line = getline(rfile);
 
-        // DETERMINE WHETHER OR NOT LINE STARTS OR ENDS COMMENT
+        // DETERMINE WHETHER OR NOT LINE CONTAINS A COMMENT
         const bool commented_line = isLineCommented(line);
         DOXEntry entry;
         if (commented_line) {
-            /*std::cout << "ENTRY STUFF: " << comment_trim(line) + '\n';*/
-            entry.functionality.entry += comment_trim(line) + '\n';
+            entry.paragraphs.at(ENTRY_COMMENT) += comment_trim(line) + '\n';
         }
-        // This line is not a comment, so therefore must be tokenized
+        // This line is not a comment, so therefore there is a function declaration
         else {
-            std::string funcdecl = extractFunctionDecl(file, line);
-            std::cout << "FUNCTION DECLARATION: " << funcdecl << "\n";
+            std::string funcdecl = extractFunctionDecl(rfile, line);
+            entry.paragraphs.at(ENTRY_FUNCTION_NAME) = funcdecl;
+
+            int functionNameIndex = 0;
+            //std::vector<std::string> functionTokens = tokenizeFunction(funcdecl, functionNameIndex);
 
 
-
-            
             ++entry_index;
+            entries[funcdecl].push_back(entry);
         }
 
-        entries.push_back(entry);
+        //  
+
+        
     }
     std::cout << "Finsihed!";
 }

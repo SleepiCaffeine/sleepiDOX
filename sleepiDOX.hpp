@@ -3,36 +3,27 @@
 #include <fstream>
 #include <vector>
 
-enum class FragmentKey {
-	Returns,
-	Functionality,
-	Params,
-	Warning,
-	TODO,
-	Custom
-};
 
-struct DOXFragment {
-	FragmentKey key;
-	unsigned short heading_level;
-	std::string entry;
-};
-
-const DOXFragment NONE = {};
+#define ENTRY_FUNCTION_NAME 0
+#define ENTRY_COMMENT 1
+#define ENTRY_RETURNS 2
+#define ENTRY_PARAMS 2
 
 struct DOXEntry {
 	bool initialized = false;
-	DOXFragment functionality = NONE;
-	DOXFragment returns = NONE;
-	DOXFragment params = NONE;
-	std::vector<DOXFragment> customs;
+	// [0] - FUNCTION NAME
+	// [1] - COMMENT
+	// [2] - RETURNS (Empty string if nothing)
+	// [3] - PARAMS
+	// [4..] - CUSTOM
+	std::vector<std::string> paragraphs{4};
+	std::string full_signature;
 };
 
 
 
 std::ifstream openReadFile(const char* fileName);
 std::ofstream openWriteFile(const char* fileName);
-DOXFragment populateEntry(const FragmentKey key);
 
 std::vector<std::string> tokenizeLine(const std::string& line);
 void appendReturn(std::ofstream& file, const std::string& line);
