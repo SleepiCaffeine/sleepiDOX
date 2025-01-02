@@ -15,32 +15,6 @@ bool containsInOrder(const std::string& str, const std::string& chars) {
         });
 }
 
-std::ifstream openReadFile(const char* fileName)
-{
-    std::ifstream file(fileName);
-    if (!file) {
-        throw std::runtime_error("Failed to open file");
-    }
-    return file;
-}
-
-// Extract the rdbuf() within `file_stream` into string stream
-// and return string
-std::string extractFileContent(const std::ifstream& file_stream)
-{
-    std::ostringstream oss;
-    oss << file_stream.rdbuf();
-    return oss.str();
-}
-
-std::ofstream openWriteFile(const char* fileName)
-{
-    std::ofstream file(fileName);
-    if (!file) {
-        throw std::runtime_error("Failed to open file");
-    }
-    return file;
-}
 
 // trim from end
 std::string rtrim(const std::string& s) {
@@ -58,4 +32,32 @@ std::string ltrim(const std::string& s) {
 
 std::string rltrim(const std::string& str) {
     return ltrim(rtrim(str));
+}
+
+std::string comment_trim(const std::string& str) {
+    std::string copy = rltrim(str);
+    const size_t token_index = str.find("@sleepiDOX");
+    if (token_index != std::string::npos) {
+        copy.erase(token_index, 11);
+    }
+
+    if (copy.size() < 2) {
+        return copy;
+    }
+
+    // Annoying way of deleting slashes
+    // This way I don't have to rltrim(copy) after
+    if (copy.at(0) == '/') {
+        if (copy.at(1) == '/') {
+            copy.erase(0, copy.find_first_not_of("/ ", 1));
+        }
+        else if (copy.at(1) == '*') {
+            copy.erase(0, copy.find_first_not_of("* ", 1));
+        }
+    }
+
+    if (copy.at(0) == '*' && copy.at(1) == '/') {
+        copy.erase(0, 2);
+    }
+    return copy;
 }

@@ -1,4 +1,7 @@
 #include "RegexFileParser.hpp"
+#include "slpUtility.hpp"
+#include <fstream>
+#include <sstream>
 
 // This will catch every comment single line, or not
 // Multilines will be caught as one
@@ -24,4 +27,36 @@ std::vector< std::smatch > getRegexMatches(const std::string& content, const cha
 }
 
 
+std::ifstream openReadFile(const char* fileName)
+{
+	std::ifstream file(fileName);
+	if (!file) {
+		throw std::runtime_error("Failed to open file");
+	}
+	return file;
+}
+
+std::string extractFileContent(const std::ifstream& file_stream)
+{
+	std::ostringstream oss;
+	oss << file_stream.rdbuf();
+	return oss.str();
+}
+
+std::ofstream openWriteFile(const char* fileName)
+{
+	std::ofstream file(fileName);
+	if (!file) {
+		throw std::runtime_error("Failed to open file");
+	}
+	return file;
+}
+
+std::string getline(std::ifstream& file) {
+	const int LINE_LENGTH = 512;
+	char cline[LINE_LENGTH];
+	file.getline(&cline[0], LINE_LENGTH, '\n');
+	std::string line(cline);
+	return rtrim(line);
+}
 
