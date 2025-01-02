@@ -11,7 +11,6 @@ int sum(int a, int b);
 Returns nothing, all operations are done in-place */
 
 // @sleepiPARAM vec : vector to normalize
-// 
 
 // @sleepiPARAM scale : optionally scales vector
 // @sleepiRETURNS nothing

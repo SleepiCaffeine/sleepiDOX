@@ -34,30 +34,19 @@ std::string rltrim(const std::string& str) {
     return ltrim(rtrim(str));
 }
 
-std::string comment_trim(const std::string& str) {
-    std::string copy = rltrim(str);
-    const size_t token_index = str.find("@sleepiDOX");
-    if (token_index != std::string::npos) {
-        copy.erase(token_index, 11);
+std::string commentTrim(const std::string_view& comment, const std::string_view& token) {
+    std::string comment_copy(comment);
+    
+    // Remove provided token
+    if (const size_t token_index = comment_copy.find(token);
+        token_index != std::string::npos) {
+        comment_copy.erase(0, token_index + token.size()+1);
+    }
+    // Remove multiline-end token
+    if (const size_t multiline_end_pos = comment_copy.find("*/");
+                     multiline_end_pos != std::string::npos) {
+        comment_copy.erase(multiline_end_pos);
     }
 
-    if (copy.size() < 2) {
-        return copy;
-    }
-
-    // Annoying way of deleting slashes
-    // This way I don't have to rltrim(copy) after
-    if (copy.at(0) == '/') {
-        if (copy.at(1) == '/') {
-            copy.erase(0, copy.find_first_not_of("/ ", 1));
-        }
-        else if (copy.at(1) == '*') {
-            copy.erase(0, copy.find_first_not_of("* ", 1));
-        }
-    }
-
-    if (copy.at(0) == '*' && copy.at(1) == '/') {
-        copy.erase(0, 2);
-    }
-    return copy;
+    return comment_copy;
 }
