@@ -21,12 +21,24 @@
     <ClInclude Include="sleepiDOX.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RegexFileParser.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="slpUtility.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DocTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="sleepiDOX.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RegexFileParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="slpUtility.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
