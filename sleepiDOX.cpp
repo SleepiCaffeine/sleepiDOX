@@ -60,6 +60,10 @@ void generateDocFile(std::ofstream& output_file, const std::unordered_map<std::s
     Step 4: Separate with a "- - -"
     Step 5: Repeat
     */
+
+    // Markdown really likes double newlines
+    const char* MD_NL = "\n\n";
+
     output_file << "# Table of contents:\n";
     for (const auto& [name, entry] : entries ) {
         output_file << "- [" << name << "](#" << name << ")\n";
@@ -69,20 +73,18 @@ void generateDocFile(std::ofstream& output_file, const std::unordered_map<std::s
         output_file << "## " << name << "()\n";
         
         for (const auto& entry_details : entry) {
-            output_file << "```" << entry_details.full_signature << ")```\n";
-            output_file << "### Description:\n" << entry_details.paragraphs.at(ENTRY_COMMENT);
+            std::vector<std::string> text = entry_details.paragraphs;
+            output_file << "```" << text.at(ENTRY_FUNCTION_DEFINTION) << "```\n";
+            output_file << "### Description:\n" << text.at(ENTRY_COMMENT) << MD_NL;
 
-            // Ehhhhhhhhhhhhhhhhhhhhhhhh
-            // Should rewrite this, so that params is also an array
-            // temporary to make an MVP
-            if (!entry_details.paragraphs.at(ENTRY_PARAMS).empty()) {
+            if (!text.at(ENTRY_PARAMS).empty()) {
                 output_file << "### Params:\n";
-                output_file << entry_details.paragraphs.at(ENTRY_PARAMS);
+                output_file << text.at(ENTRY_PARAMS) << MD_NL;
             }
 
-            if (!entry_details.paragraphs.at(ENTRY_RETURNS).empty()) {
+            if (!text.at(ENTRY_RETURNS).empty()) {
                 output_file << "### Returns:\n";
-                output_file << entry_details.paragraphs.at(ENTRY_RETURNS);
+                output_file << text.at(ENTRY_RETURNS) << MD_NL;
             }
 
             output_file << "\n";
@@ -99,31 +101,42 @@ int main(const int args, const char* argv[]) {
     }
 
     // OPEN READ FILE
-    std::ifstream rfile = openReadFile(rfilename.c_str());
-    std::string file_content = extractFileContent(rfile);
+    std::ifstream rfile     = openReadFile(rfilename.c_str());
+    std::string fileContent = extractFileContent(rfile);
+    std::unordered_map<std::string, std::vector<DOXEntry>> entries;
+
 
     // the only time I found copilot useful
     const char* EVERYTHING_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \t]*@sleepiDOX[\s\S]*?\*\/)|\/\/[ \t]*@sleepiRETURNS[ \t]*([^\n]*)|\/\/[ \t]*@sleepiPARAM[ \t]*([^\n]*)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
+    const auto functionMatches = getRegexMatches(fileContent, EVERYTHING_REGEX);
+    
+    DOXEntry entry;
+    std::vector<std::string> entry_text{5};
+    for (const std::smatch& match : functionMatches) {
 
-
-
-    const auto function_matches = getRegexMatches(file_content, EVERYTHING_REGEX);
-
-    for (const std::smatch& match : function_matches) {
         if (match[1].matched) {
-            std::cout << "Found @sleepiDOX comment: " << match[1] << '\n';
+            entry_text.at(ENTRY_COMMENT) = commentTrim(match[1].str(), "@sleepiDOX");
         }
         if (match[2].matched) {
-            std::cout << "Found @sleepiRETURNS comment: " << match[2] << '\n';
+            entry_text.at(ENTRY_RETURNS) = commentTrim(match[2].str(), "@sleepiRETRUNS");
         }
         if (match[3].matched) {
-            std::cout << "Found @sleepiPARAM comment: " << match[3] << '\n';
+            entry_text.at(ENTRY_PARAMS) = commentTrim(match[3].str(), "@sleepiPARAM") + '\n';
         }
         if (match[4].matched) {
-            std::cout << "Found function declaration: " << match[4] << '\n';
-            std::cout << "Function name: " << match[5] << '\n';
+            entry_text.at(ENTRY_FUNCTION_DEFINTION) = match[4].str();
+            entry_text.at(ENTRY_FUNCTION_NAME) = match[5].str();
+
+            entry.paragraphs = entry_text;
+
+            entries[entry_text.at(ENTRY_FUNCTION_NAME) ].push_back(entry);
+            entry = {};
+            entry_text.clear();
+            entry_text.resize(5);
         }
     }
 
+    std::ofstream outputFile = openWriteFile(wfilename.c_str());
+    generateDocFile(outputFile, entries);
     std::cout << "Finsihed!";
 }

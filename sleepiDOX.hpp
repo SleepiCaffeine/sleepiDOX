@@ -7,17 +7,17 @@
 #define ENTRY_FUNCTION_NAME 0
 #define ENTRY_COMMENT 1
 #define ENTRY_RETURNS 2
-#define ENTRY_PARAMS 2
+#define ENTRY_PARAMS 3
+#define ENTRY_FUNCTION_DEFINTION 4
 
 struct DOXEntry {
-	bool initialized = false;
 	// [0] - FUNCTION NAME
 	// [1] - COMMENT
 	// [2] - RETURNS (Empty string if nothing)
 	// [3] - PARAMS
-	// [4..] - CUSTOM
+	// [4] - FUNCTION DEFINITION
+	// [5..] - CUSTOM | NEEDS TO BE RESIZED
 	std::vector<std::string> paragraphs{4};
-	std::string full_signature;
 };
 
 
