@@ -1,41 +1,10 @@
 #include "sleepiDOX.hpp"
-#include <sstream>
+#include "slpUtility.hpp"
+#include "RegexFileParser.hpp"
 #include <iostream>
-#include <algorithm> 
+#include <sstream>
 #include <unordered_map>
 
-std::ifstream openReadFile(const char* fileName)
-{
-    std::ifstream file(fileName);
-    if (!file) {
-        throw std::runtime_error("Failed to open file");
-    }
-    return file;
-}
-
-std::ofstream openWriteFile(const char* fileName)
-{
-    std::ofstream file(fileName);
-    if (!file) {
-        throw std::runtime_error("Failed to open file");
-    }
-    return file;
-}
-
-// trim from end (in place)
-inline std::string& rtrim(std::string& s) {
-    s.erase(s.find_last_not_of(" w\t\f\v\r\n") + 1);
-    return s;
-}
-// trim from start (in place)
-inline std::string& ltrim(std::string& s) {
-    s.erase(0, s.find_first_not_of(" w\t\f\v\r\n"));
-    return s;
-}
-
-inline std::string& rltrim(std::string& str) {
-    return ltrim(rtrim(str));
-}
 
 inline std::string& comment_trim(std::string& str) {
     str = rltrim(str);
@@ -65,16 +34,7 @@ inline std::string& comment_trim(std::string& str) {
     return str;
 }
 
-// Checks whether `str` contains every character in `chars` in the order provided.
-// Returns true if so.
-inline bool containsInOrder(const std::string& str, const std::string& chars) {
-    size_t last_pos = 0;
-    return std::none_of(chars.cbegin(), chars.cend(), [&str, &last_pos](char ch) {
-        last_pos = str.find(ch, last_pos);
-        return last_pos == std::string::npos;
-    });
- 
-}
+
 
 std::string getline(std::ifstream& file) {
     const int LINE_LENGTH = 256;
@@ -150,15 +110,6 @@ std::vector<std::string> tokenizeFunction(const std::string& declaration, int& i
     return tokens;
 }
 
-
-template <typename T>
-void printVector(const std::vector<T>& vec) noexcept {
-    std::cout << "[\"";
-    for (size_t i = 0; i < vec.size() - 1; ++i) {
-        std::cout <<  vec.at(i) << "\", \"";
-    }
-    std::cout << vec.back() << "\"]";
-}
 
 
 std::string extractFunctionDecl(std::ifstream& file, std::string last_read_line) {
@@ -357,49 +308,14 @@ int main(const int args, const char* argv[]) {
 
     // OPEN READ FILE
     std::ifstream rfile = openReadFile(rfilename.c_str());
+    std::string file_content = extractFileContent(rfile);
 
-    std::unordered_map<std::string, std::vector<DOXEntry>> entries;
+    const char* FUNCTION_REGEX = R"(([a-zA-Z_][\w\s:<>,*&]*\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*;))";
+    auto matches = getRegexMatches(file_content, FUNCTION_REGEX);
 
-    // READ THE FILE LINE BY LINE
-    DOXEntry entry;
-    while (!rfile.eof()) {
-        // READ THE LINE AND TRIM
-        std::string line = getline(rfile);
-
-        // Adding this just so it wouldn't add a bunch of newlines
-        // Just because of these characters
-        if (line == "\\*" || line == "/*")
-            continue;
-
-        // DETERMINE WHETHER OR NOT LINE CONTAINS A COMMENT
-        const bool commented_line = isLineCommented(line);
-        
-        if (commented_line) {
-            entry.paragraphs.at(ENTRY_COMMENT) += comment_trim(line) + "\n\n";
-        }
-        // This line is not a comment, so therefore there is a function declaration
-        else {
-            const std::string funcdecl = extractFunctionDecl(rfile, line);
-            entry.full_signature = funcdecl;
-
-            int functionNameIndex = 0;
-            const std::vector<std::string> functionTokens = tokenizeFunction(funcdecl, functionNameIndex);
-            entry.paragraphs.at(ENTRY_FUNCTION_NAME) = functionTokens.at(functionNameIndex);
-
-            entries[entry.paragraphs.at(ENTRY_FUNCTION_NAME)].push_back(entry);
-
-            // Reset the container
-            entry = {};
-
-            // Everything before functionNameIndex is the return value
-            // Everything after are parameters. Only needed if @DOXParam / @DOXReturns are used
-        }  
+    for (const std::smatch& match : matches) {
+        std::cout << "Found function: " << match[1] << '\n';
     }
-
-    // At this point, the entire file should've been read, and processed accordingly.
-    std::ofstream writeFile = openWriteFile(wfilename.c_str());
-
-    generateDocFile(writeFile, entries);
 
     std::cout << "Finsihed!";
 }
