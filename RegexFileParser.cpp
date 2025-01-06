@@ -8,7 +8,7 @@
 // (\/\/.*?$)|(\/\*(.|\n)*?\*\\)
 
 std::vector< std::smatch > getRegexMatches(const std::string& content, const char* match) {
-	std::regex provided_regex(match, std::regex_constants::ECMAScript);
+	std::regex provided_regex(match);
 	std::smatch smatch;
 
 	auto start_iter = content.cbegin();
@@ -25,6 +25,50 @@ std::vector< std::smatch > getRegexMatches(const std::string& content, const cha
 
 		return all_matches;
 }
+
+// Funciton that accepts a string, and a regex (of 2 groups)
+// Will replace every instance of group 2 with group 1.
+// FIXME: gets caught by some dumb #defines
+void replaceCodeAliases(std::string& content, const std::regex& regex) {
+	std::smatch match;
+
+	auto start = content.cbegin();
+	auto end = content.cend();
+	// Because each loop, the string gets reallocated, it's impossible to get an iterator
+	// to the first non-matched character. Therefore, this loop is not really efficient...
+	// Maybe I could try doing std::advance(.cbegin(), match[1].position() + match[2].str().length()) or something
+	while (std::regex_search(start, end, match, regex)) {
+		std::string original = match[2].str();
+		std::string alias = match[1].str();
+		std::regex aliasRegex("\\b" + alias + "\\b");
+		content = std::regex_replace(content, aliasRegex, original);
+
+		start = content.cbegin();
+		std::advance(start, match.position(1) + match[2].length());
+		end = content.cend();
+	}
+}
+
+// Function to preprocess the code to handle #define, using, and typedef directives
+// Currently only works for one file
+std::string preprocessCode(const std::string& content) {
+    std::string preprocessedContent = content;
+
+    // Handle #define directives
+    std::regex defineRegex(R"(#define\s+(\w+)\s+(.+))");
+	replaceCodeAliases(preprocessedContent, defineRegex);
+
+    // Handle using directives
+    std::regex usingRegex(R"(using\s+(\w+)\s*=\s*([\w:]+);)");
+	replaceCodeAliases(preprocessedContent, usingRegex);
+
+    // Handle typedef directives
+    std::regex typedefRegex(R"(typedef\s+([\w:]+)\s+(\w+);)");
+	replaceCodeAliases(preprocessedContent, typedefRegex);
+
+    return preprocessedContent;
+}
+
 
 
 std::ifstream openReadFile(const char* fileName)

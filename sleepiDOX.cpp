@@ -4,9 +4,15 @@
 #include <iostream>
 #include <unordered_map>
 
-
-// Parses commandline arguments to find supplied read/write files. Will have to probably rewrite this to be more flexible
-// for future flags. 
+/* @sleepiDOX Extracts the command-line arguments passed in. The required flags are:
+- -d : output file destrination/directory. Must exist.
+- -s : source file that will be parsed.
+*/
+// @sleepiPARAM args : length of `argv`
+// @sleepiPARAM argv : arguments passed into `int main()`
+// @sleepiPARAM rfile : string that will contain input file.
+// @sleepiPARAM wfile : string that will contain output file.
+// @sleepiRETURNS Returns true if all operations were successful, otherwise false.
 bool extractArguments(const int& args, const char* argv[], std::string& rfile, std::string& wfile) {
     // Possible future flags:
     // -fs  :   Parses entire folder for files
@@ -47,50 +53,49 @@ bool extractArguments(const int& args, const char* argv[], std::string& rfile, s
     return true;
 }
 
-
-void generateDocFile(std::ofstream& output_file, const std::unordered_map<std::string, std::vector<DOXEntry>>& entries) {
-    /*
-    Step 1: Make a table of contents, which will have links to every function definition
-    Step 2: For every function - add a header that has the function name
-    Step 3: Create the entry:
-        3.1: How to call the function (Comment block)
-        3.2: Comment description  ( ### Description \n comment)
-        3.3: Parameters (Each with heading level 4)
-        3.4: Return value (### Returns \n ...)
-    Step 4: Separate with a "- - -"
-    Step 5: Repeat
-    */
+// @sleepiDOX Fills the provided file output stream with preformatted documentation text.
+// @sleepiPARAM output_file : output file stream where this function will write to. Does not perform any validation.
+// @sleepiPARAM entries: hashmap of entries to document.
+// @sleepiPARAM title *(optional)*: Text at the top of the page, at header level 1
+void generateDocFile(std::ofstream& output_file, const std::unordered_map<std::string, std::vector<DOXEntry>>& entries, const std::string_view& title = "") {
 
     // Markdown really likes double newlines
-    const char* MD_NL = "\n\n";
+    constexpr char MD_NL[] = "\n\n";
+    constexpr char H1[] = "# ";
+    constexpr char H2[] = "## ";
+    constexpr char H3[] = "### ";
 
-    output_file << "# Table of contents:\n";
-    for (const auto& [name, entry] : entries ) {
+
+    if (!title.empty())
+        output_file << H1 << title << MD_NL;
+
+    output_file << H2 << "Table of contents : \n";
+    for (const auto& [name, entry] : entries) {
         output_file << "- [" << name << "](#" << name << ")\n";
-    }
+    } output_file << "- - -\n";
+
 
     for (const auto& [name, entry] : entries) {
-        output_file << "## " << name << "()\n";
-        
+        output_file << H3 << name << "()\n";
+
         for (const auto& entry_details : entry) {
-            std::vector<std::string> text = entry_details.paragraphs;
-            output_file << "```" << text.at(ENTRY_FUNCTION_DEFINTION) << "```\n";
-            output_file << "### Description:\n" << text.at(ENTRY_COMMENT) << MD_NL;
+            output_file << "```" << entry_details.at(ENTRY_FUNCTION_DEFINTION) << "```\n";
+            output_file << H3 << "Description:\n" << entry_details.at(ENTRY_COMMENT) << MD_NL;
 
-            if (!text.at(ENTRY_PARAMS).empty()) {
-                output_file << "### Params:\n";
-                output_file << text.at(ENTRY_PARAMS) << MD_NL;
+            if (!entry_details.at(ENTRY_PARAMS).empty()) {
+                output_file << H3 << "Params:\n";
+                output_file << entry_details.at(ENTRY_PARAMS) << MD_NL;
             }
 
-            if (!text.at(ENTRY_RETURNS).empty()) {
-                output_file << "### Returns:\n";
-                output_file << text.at(ENTRY_RETURNS) << MD_NL;
+            if (!entry_details.at(ENTRY_RETURNS).empty()) {
+                output_file << H3 << "Returns:\n";
+                output_file << entry_details.at(ENTRY_RETURNS) << MD_NL;
             }
 
-            output_file << "\n";
+            output_file << MD_NL;
         }
+        output_file << "- - -\n";
     }
-    output_file << "- - -\n";
 }
 
 int main(const int args, const char* argv[]) {
@@ -107,32 +112,64 @@ int main(const int args, const char* argv[]) {
 
 
     // the only time I found copilot useful
-    const char* EVERYTHING_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \t]*@sleepiDOX[\s\S]*?\*\/)|\/\/[ \t]*@sleepiRETURNS[ \t]*([^\n]*)|\/\/[ \t]*@sleepiPARAM[ \t]*([^\n]*)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
-    const auto functionMatches = getRegexMatches(fileContent, EVERYTHING_REGEX);
-    
+    //const char* CLASS_REGEX = R"((class|struct)\s+([A-Za-z_][A-Za-z_0-9]*)\s*(?:\s*:\s*(public|private|protected)?\s*[A-Za-z_][A-Za-z_0-9]*)?\s*{)";
+    const char* CLASS_REGEX = R"((class|struct)\s+([A-Za-z_][A-Za-z_0-9]*)\s*(?::\s*(public|private|protected)?\s*[A-Za-z_][A-Za-z_0-9]*)?\s*\{)";
+
+    const auto classMatches = getRegexMatches(fileContent, CLASS_REGEX);
+
+    std::vector< std::string > classNames;
+    // Keeps track of where class bodies begin and end, so'd, that when we query for functions
+    // we don't include ones that are already within classes.
+    std::vector <std::pair <size_t, size_t >> classBodyPositions;
+
+
+    for (const std::smatch& classMatch : classMatches) {
+        classNames.push_back(classMatch[2].str());
+        classBodyPositions.emplace_back(classMatch.position(), classMatch.position() + classMatch.length());
+    }
+
+
     DOXEntry entry;
-    std::vector<std::string> entry_text{5};
+    const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \t]*@sleepiDOX[\s\S]*?\*\/)|\/\/[ \t]*@sleepiRETURNS[ \t]*([^\n]*)|\/\/[ \t]*@sleepiPARAM[ \t]*([^\n]*)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
+    const auto functionMatches = getRegexMatches(fileContent, FUNCTION_REGEX);
     for (const std::smatch& match : functionMatches) {
 
+        
+
         if (match[1].matched) {
-            entry_text.at(ENTRY_COMMENT) = commentTrim(match[1].str(), "@sleepiDOX");
+            entry.at(ENTRY_COMMENT) = commentTrim(match[1].str(), "@sleepiDOX");
         }
         if (match[2].matched) {
-            entry_text.at(ENTRY_RETURNS) = commentTrim(match[2].str(), "@sleepiRETRUNS");
+            entry.at(ENTRY_RETURNS) = commentTrim(match[2].str(), "@sleepiRETRUNS");
         }
         if (match[3].matched) {
-            entry_text.at(ENTRY_PARAMS) = commentTrim(match[3].str(), "@sleepiPARAM") + '\n';
+            entry.at(ENTRY_PARAMS) = commentTrim(match[3].str(), "@sleepiPARAM") + '\n';
         }
         if (match[4].matched) {
-            entry_text.at(ENTRY_FUNCTION_DEFINTION) = match[4].str();
-            entry_text.at(ENTRY_FUNCTION_NAME) = match[5].str();
+            const std::string functionDefinition = rltrim(match[4].str());
+            std::string functionName = rltrim(match[5].str());
 
-            entry.paragraphs = entry_text;
+            // Checks whether the function is within a class
+            std::string className;
+            size_t funcStart = match.position();
+            size_t funcEnd = funcStart + match.length();
 
-            entries[entry_text.at(ENTRY_FUNCTION_NAME) ].push_back(entry);
+            for (size_t index = 0; index < classBodyPositions.size(); ++index) {
+                if (funcStart >= classBodyPositions.at(index).first &&
+                    funcEnd <= classBodyPositions.at(index).second) {
+                    className = classNames.at(index);
+                    break;
+                }
+            }
+
+            if (!className.empty())
+                functionName = className + "::" + functionName;
+
+            entry.at(ENTRY_FUNCTION_DEFINTION) = functionDefinition;
+            entry.at(ENTRY_FUNCTION_NAME) = functionName;
+
+            entries[entry.at(ENTRY_FUNCTION_NAME) ].push_back(entry);
             entry = {};
-            entry_text.clear();
-            entry_text.resize(5);
         }
     }
 
