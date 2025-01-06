@@ -1,7 +1,8 @@
 #pragma once
 #include <string>
 #include <fstream>
-#include <vector>
+#include <array>
+
 
 
 #define ENTRY_FUNCTION_NAME 0
@@ -9,17 +10,9 @@
 #define ENTRY_RETURNS 2
 #define ENTRY_PARAMS 3
 #define ENTRY_FUNCTION_DEFINTION 4
+#define ENTRY_FUNCTION_CLASS 5
 
-struct DOXEntry {
-	// [0] - FUNCTION NAME
-	// [1] - COMMENT
-	// [2] - RETURNS (Empty string if nothing)
-	// [3] - PARAMS
-	// [4] - FUNCTION DEFINITION
-	// [5..] - CUSTOM | NEEDS TO BE RESIZED
-	std::vector<std::string> paragraphs{4};
-};
-
+using DOXEntry = std::array<std::string, 5>;
 
 
 std::ifstream openReadFile(const char* fileName);
