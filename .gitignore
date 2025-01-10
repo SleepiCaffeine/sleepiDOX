@@ -365,3 +365,5 @@ FodyWeavers.xsd
 /sleepiDOX.vcxproj
 /output.md
 /DocTest.hpp
+/DocTest.md
+*.md

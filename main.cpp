@@ -3,18 +3,7 @@
 #include "sleepiDOX.hpp"
 #include <iostream>
 
-int main(const int args, const char* argv[]) {
-    // PARSE ARGUMENTS
-    std::vector<std::string> arguments(args);
-    for (size_t i = 0; i < args; ++i)
-        arguments.at(i) = argv[i];
-
-    Sleepi::DOXContext context = extractArguments(arguments);
-    
-
-    // OPEN READ FILE
-    std::ifstream rfile = openReadFile( context.sourceDirs.at(0) );
-    std::string fileContent = extractFileContent(rfile);
+Sleepi::DOXContainer isolateEntries(const std::string& fileContent) {
     Sleepi::DOXContainer entries;
 
 
@@ -79,7 +68,34 @@ int main(const int args, const char* argv[]) {
         }
     }
 
-    std::ofstream outputFile = openWriteFile(context.outputFileDir);
-    generateDocFile(outputFile, entries, "My Document");
+    return entries;
+}
+
+void documentFile(const std::string& directory, std::string destination = "") {
+    std::ifstream rfile = openReadFile(directory);
+    Sleepi::DOXContainer entries = isolateEntries(extractFileContent(rfile));
+
+    // Make output in the same destination as input, just with the .md extension
+    if (destination.empty()) {
+        destination = directory;
+        destination.replace(destination.find_last_of('.'), std::string::npos, ".md");
+    }
+    std::cout << "Writing to " << destination << '\n';
+    std::ofstream outputFile = openWriteFile(destination);
+    generateDocFile(outputFile, entries);
+}
+
+
+int main(const int args, const char* argv[]) {
+    // PARSE ARGUMENTS
+    std::vector<std::string> arguments(args);
+    for (size_t i = 0; i < args; ++i)
+        arguments.at(i) = argv[i];
+
+    Sleepi::DOXContext context = extractArguments(arguments);
+    
+    for (const std::string& fileDestination : context.sourceDirs) {
+        documentFile(fileDestination);
+    }
     std::cout << "Finsihed!";
 }
