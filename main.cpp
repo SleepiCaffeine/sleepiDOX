@@ -1,18 +1,21 @@
 #include "slpUtility.hpp"
 #include "RegexFileParser.hpp"
 #include "sleepiDOX.hpp"
+#include <iostream>
 
 int main(const int args, const char* argv[]) {
     // PARSE ARGUMENTS
-    std::string rfilename, wfilename;
-    if (extractArguments(args, argv, rfilename, wfilename) != true) {
-        return EXIT_FAILURE;
-    }
+    std::vector<std::string> arguments(args);
+    for (size_t i = 0; i < args; ++i)
+        arguments.at(i) = argv[i];
+
+    Sleepi::DOXContext context = extractArguments(arguments);
+    
 
     // OPEN READ FILE
-    std::ifstream rfile = openReadFile(rfilename.c_str());
+    std::ifstream rfile = openReadFile( context.sourceDirs.at(0) );
     std::string fileContent = extractFileContent(rfile);
-    DOXContainer entries;
+    Sleepi::DOXContainer entries;
 
 
     // the only time I found copilot useful
@@ -32,7 +35,7 @@ int main(const int args, const char* argv[]) {
     }
 
 
-    DOXEntry entry;
+    Sleepi::DOXEntry entry;
     const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \t]*@sleepiDOX[\s\S]*?\*\/)|\/\/[ \t]*@sleepiRETURNS[ \t]*([^\n]*)|\/\/[ \t]*@sleepiPARAM[ \t]*([^\n]*)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
     const auto functionMatches = getRegexMatches(fileContent, FUNCTION_REGEX);
     for (const std::smatch& match : functionMatches) {
@@ -40,13 +43,13 @@ int main(const int args, const char* argv[]) {
 
 
         if (match[1].matched) {
-            entry.at(ENTRY_COMMENT) += commentTrim(match[1].str(), "@sleepiDOX");
+            entry.at(Sleepi::ENTRY_COMMENT) += commentTrim(match[1].str(), "@sleepiDOX");
         }
         if (match[2].matched) {
-            entry.at(ENTRY_RETURNS) += commentTrim(match[2].str(), "@sleepiRETRUNS");
+            entry.at(Sleepi::ENTRY_RETURNS) += commentTrim(match[2].str(), "@sleepiRETRUNS");
         }
         if (match[3].matched) {
-            entry.at(ENTRY_PARAMS) += commentTrim(match[3].str(), "@sleepiPARAM") + "\n\n";
+            entry.at(Sleepi::ENTRY_PARAMS) += commentTrim(match[3].str(), "@sleepiPARAM") + "\n\n";
         }
         if (match[4].matched) {
             const std::string functionDefinition = rltrim(match[4].str());
@@ -68,15 +71,15 @@ int main(const int args, const char* argv[]) {
             if (!className.empty())
                 functionName = className + "::" + functionName;
 
-            entry.at(ENTRY_FUNCTION_DEFINTION) = functionDefinition;
-            entry.at(ENTRY_FUNCTION_NAME) = functionName;
+            entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
+            entry.at(Sleepi::ENTRY_FUNCTION_NAME) = functionName;
 
-            entries[entry.at(ENTRY_FUNCTION_NAME)].push_back(entry);
+            entries[entry.at(Sleepi::ENTRY_FUNCTION_NAME)].push_back(entry);
             entry = {};
         }
     }
 
-    std::ofstream outputFile = openWriteFile(wfilename.c_str());
+    std::ofstream outputFile = openWriteFile(context.outputFileDir);
     generateDocFile(outputFile, entries, "My Document");
     std::cout << "Finsihed!";
 }
