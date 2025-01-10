@@ -59,8 +59,10 @@ Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const 
         }
     }
 
-    if (context.outputFileDir.empty())
-        context.errorFlags |= sErr::NoOutputFileSpecified;
+   // Commented because new default behavior will now extract each file separately
+   // Will remove after a stable version
+   /* if (context.outputFileDir.empty())
+        context.errorFlags |= sErr::NoOutputFileSpecified;*/
 
     // If the -fs flag was not specified, and the input is still empty
     // This means that no input was provided at all.

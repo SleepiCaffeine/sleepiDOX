@@ -3,10 +3,7 @@
 #include "sleepiDOX.hpp"
 #include <iostream>
 
-Sleepi::DOXContainer isolateEntries(const std::string& fileContent) {
-    Sleepi::DOXContainer entries;
-
-
+void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries) {
     // the only time I found copilot useful
     const char* CLASS_REGEX = R"((class|struct)\s+([A-Za-z_][A-Za-z_0-9]*)\s*(?::\s*(public|private|protected)?\s*[A-Za-z_][A-Za-z_0-9]*)?\s*\{((?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*)\})";
 
@@ -67,13 +64,12 @@ Sleepi::DOXContainer isolateEntries(const std::string& fileContent) {
             entry = {};
         }
     }
-
-    return entries;
 }
 
 void documentFile(const std::string& directory, std::string destination = "") {
     std::ifstream rfile = openReadFile(directory);
-    Sleepi::DOXContainer entries = isolateEntries(extractFileContent(rfile));
+    Sleepi::DOXContainer entries;
+    isolateEntries(extractFileContent(rfile), entries);
 
     // Make output in the same destination as input, just with the .md extension
     if (destination.empty()) {
@@ -93,9 +89,19 @@ int main(const int args, const char* argv[]) {
         arguments.at(i) = argv[i];
 
     Sleepi::DOXContext context = extractArguments(arguments);
-    
-    for (const std::string& fileDestination : context.sourceDirs) {
-        documentFile(fileDestination);
+    if (context.outputFileDir.empty()) {
+        for (const std::string& fileDestination : context.sourceDirs) {
+            documentFile(fileDestination);
+        }
+    }
+    else {
+        Sleepi::DOXContainer entries;
+        for (const std::string& dir : context.sourceDirs) {
+            std::ifstream rfile = openReadFile(dir);
+            isolateEntries(extractFileContent(rfile), entries);
+        }
+        std::ofstream outputFile = openWriteFile(context.outputFileDir);
+        generateDocFile(outputFile, entries);
     }
     std::cout << "Finsihed!";
 }
