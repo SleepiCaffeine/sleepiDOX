@@ -9,10 +9,10 @@
 std::vector< std::smatch > getRegexMatches(const std::string& content, const char* match);
 std::string preprocessCode(const std::string& content);
 
-std::ifstream openReadFile(const char* fileName);
+std::ifstream openReadFile(const std::string_view& fileName);
 
 std::string extractFileContent(const std::ifstream& file_stream);
 
-std::ofstream openWriteFile(const char* fileName);
+std::ofstream openWriteFile(const std::string_view& fileName);
 
 std::string getline(std::ifstream& file);

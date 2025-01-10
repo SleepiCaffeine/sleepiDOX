@@ -71,9 +71,9 @@ std::string preprocessCode(const std::string& content) {
 
 
 
-std::ifstream openReadFile(const char* fileName)
+std::ifstream openReadFile(const std::string_view& fileName)
 {
-	std::ifstream file(fileName);
+	std::ifstream file(fileName.data());
 	if (!file) {
 		throw std::runtime_error("Failed to open file");
 	}
@@ -87,9 +87,9 @@ std::string extractFileContent(const std::ifstream& file_stream)
 	return oss.str();
 }
 
-std::ofstream openWriteFile(const char* fileName)
+std::ofstream openWriteFile(const std::string_view& fileName)
 {
-	std::ofstream file(fileName);
+	std::ofstream file(fileName.data());
 	if (!file) {
 		throw std::runtime_error("Failed to open file");
 	}
