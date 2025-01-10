@@ -10,7 +10,7 @@ Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const 
     Sleepi::DOXContext context =  { {}, "", 0};
 
     // Looping up to .size() - 1, because every flag has to have a second string afterward
-    for (size_t index = 0; index < argv.size() - 1; ++index) {
+    for (size_t index = 1; index < argv.size() - 1; index += 2) {
         const std::string_view argument = argv.at(index);
 
         // Flag that dictates the source file
@@ -25,10 +25,16 @@ Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const 
         else if (argument == "-fs") {
             namespace fs = std::filesystem;
 
-            const std::string_view directory = argv.at(index + 1);
-            const fs::path inputDirPath = directory;
+            std::string directory = argv.at(index + 1);
+            if (directory.at(0) == '-')
+                directory = argv.at(0);
 
-            // Make sure the file actually exists, and if not, set an error flag
+            fs::path inputDirPath = directory;
+            if (inputDirPath.has_filename())
+                inputDirPath = inputDirPath.parent_path();
+
+
+            // Make sure the directory actually exists, and if not, set an error flag
             if (!fs::exists(inputDirPath)) {
                 context.errorFlags |= sErr::InputDirDoesntExist;
                 return context;
