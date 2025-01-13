@@ -17,7 +17,7 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
 
     for (const std::smatch& classMatch : classMatches) {
         classNames.push_back(classMatch[2].str());
-        classBodyPositions.emplace_back(classMatch.position(), classMatch.position() + classMatch.length());
+        classBodyPositions.emplace_back(classMatch.prefix().str().length(), classMatch.prefix().str().length() + classMatch.length());
     }
 
 
@@ -38,7 +38,17 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
             entry.at(Sleepi::ENTRY_PARAMS) += commentTrim(match[3].str(), "@sleepiPARAM") + "\n\n";
         }
         if (match[4].matched) {
-            const std::string functionDefinition = rltrim(match[4].str());
+
+            // I don't want to add an entry for something that has no documentation
+            // And since the only required comment is a @sleepiDOX one, I will filter based on that
+
+            if (entry.at(Sleepi::ENTRY_COMMENT).empty()) {
+                entry = {};
+                continue;
+            }
+
+
+            std::string functionDefinition = rltrim(match[4].str());
             std::string functionName = rltrim(match[5].str());
 
             // Checks whether the function is within a class
@@ -46,6 +56,7 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
             size_t funcStart = fileContent.find(match[4].str()); // This can accidentally catch something else, so best to replace asap
             size_t funcEnd = funcStart + match.length();
 
+            // Check if a function is within a class
             for (size_t index = 0; index < classBodyPositions.size(); ++index) {
                 if (funcStart >= classBodyPositions.at(index).first &&
                     funcEnd <= classBodyPositions.at(index).second) {
@@ -54,8 +65,12 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
                 }
             }
 
-            if (!className.empty())
-                functionName = className + "::" + functionName;
+            if (!className.empty()) {
+                
+                functionDefinition.insert(functionDefinition.find(functionName), className + "::");
+                functionName.insert(0, className + "::");
+
+            }
 
             entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
             entry.at(Sleepi::ENTRY_FUNCTION_NAME) = functionName;
