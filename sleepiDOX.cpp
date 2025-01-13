@@ -108,6 +108,29 @@ std::string replaceString(std::string& source, const std::string_view& search,
     return source;
 }
 
+void generateTOE(std::ofstream& output_file, const Sleepi::DOXContainer& entries, const std::string_view& title = "") {
+    if (!title.empty())
+        output_file << "# " << title << "\n\n";
+
+    output_file << "## Table of contents : \n";
+    size_t index = 1;
+    for (const auto& [name, entry] : entries) {
+        for (const auto& single_entry : entry) {
+            std::string functionDefinition = single_entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+            functionDefinition.pop_back();
+
+            // Markdown really doesn't like these in a header
+            replaceString(functionDefinition, "<", "\\<");
+            replaceString(functionDefinition, ">", "\\>");
+
+            // Making headers ID'd from 1 to n
+            output_file << "- [" << functionDefinition
+                << "](#" << index++ << ")\n";
+        }
+    } output_file << "- - -\n";
+}
+
+
 
 void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& entries, const std::string_view& title) {
 
@@ -120,38 +143,18 @@ void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& ent
     constexpr char H3[] = "### ";
 
 
-    if (!title.empty())
-        output_file << H1 << title << MD_NL;
+    generateTOE(output_file, entries, title);
 
-    output_file << H2 << "Table of contents : \n";
     size_t index = 1;
-    for (const auto& [name, entry] : entries) {
-        for (const auto& single_entry : entry) {
-            std::string functionDefinition = single_entry.at(ENTRY_FUNCTION_DEFINTION);
-            functionDefinition.pop_back();
-
-            // Markdown really doesn't like these in a header
-            replaceString(functionDefinition, "<", "\\<");
-            replaceString(functionDefinition, ">", "\\>");
-
-            // Making headers ID'd from 1 to n
-            output_file << "- [" << functionDefinition
-                        << "](#" << index++ << ")\n";
-        }
-    } output_file << "- - -\n";
-
-    index = 1;
     for (const auto& [name, entry] : entries) {
 
         for (const auto& entry_details : entry) {
 
             std::string functionDefinition = entry_details.at(ENTRY_FUNCTION_DEFINTION);
             functionDefinition.pop_back();
-            // <h3 id="2">CHART void normalize_vector(Vector2i& vec, const int scale = 1)</h3>
 
             output_file << "<h3 id=\"" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
 
-            output_file << "```" << entry_details.at(ENTRY_FUNCTION_DEFINTION) << "```" << MD_NL;
             output_file << H3 << "Description:" << MD_NL << entry_details.at(ENTRY_COMMENT) << MD_NL;
 
             if (!entry_details.at(ENTRY_PARAMS).empty()) {
