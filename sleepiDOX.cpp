@@ -132,7 +132,7 @@ void generateTOE(std::ofstream& output_file, const Sleepi::DOXContainer& entries
 
 
 
-void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& entries, const std::string_view& title) {
+void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& entries, const std::string_view& title, const std::string_view& source_name) {
 
     using namespace Sleepi;
 
@@ -154,9 +154,9 @@ void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& ent
             functionDefinition.pop_back();
 
             output_file << "<h3 id=\"" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
-
+            output_file << "`" << source_name << "`" << MD_NL;
             output_file << H3 << "Description:" << MD_NL << entry_details.at(ENTRY_COMMENT) << MD_NL;
-
+            
             if (!entry_details.at(ENTRY_PARAMS).empty()) {
                 output_file << H3 << "Params:" << MD_NL;
                 output_file << entry_details.at(ENTRY_PARAMS) << MD_NL;
@@ -171,4 +171,7 @@ void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& ent
         }
         output_file << "- - -" << MD_NL;
     }
+
+
+    output_file << MD_NL << "<p style=\"font-size : 12;\">Made using <a href=\"https://github.com/SleepiCaffeine/sleepiDOX\">sleepiDOX</a></p>";
 }
