@@ -47,11 +47,11 @@ Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const 
 /* @sleepiDOX Checks `errorFlags` for every error flag in `Sleepi::ErrorBits` and throws exceptions accordingly.
 Typically called internally, but can be done externally if `extractArguments` doesn't do it on it's own.*/
 // @sleepiPARAM `const Sleepi::DOXContext& context` : DOXContext that will be checked for any error flags set
-
 void validateContext(const Sleepi::DOXContext& context);
 
 // @sleepiDOX Fills the provided file output stream with preformatted documentation text.
 // @sleepiPARAM outputFile : output file stream where this function will write to. Does not perform any validation.
 // @sleepiPARAM entries: hashmap of entries to document.
 // @sleepiPARAM title *(optional)*: Text at the top of the page, at header level 1
-void generateDocFile(std::ofstream& outputFile, const Sleepi::DOXContainer& entries, const std::string_view& title = "");
+// @sleepiPARAM source_name *(optional)*: filename (or any comment) that will be added next to function descriptions to show which file they come from.
+void generateDocFile(std::ofstream& outputFile, const Sleepi::DOXContainer& entries, const std::string_view& title = "", const std::string_view& source_name = "");
