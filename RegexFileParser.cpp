@@ -3,11 +3,8 @@
 #include <fstream>
 #include <sstream>
 
-// This will catch every comment single line, or not
-// Multilines will be caught as one
-// (\/\/.*?$)|(\/\*(.|\n)*?\*\\)
 
-std::vector< std::smatch > getRegexMatches(const std::string& content, const char* match) {
+std::vector< std::smatch > getRegexMatches(const std::string& content, const std::string& match) {
 	std::regex provided_regex(match);
 	std::smatch smatch;
 
@@ -69,8 +66,6 @@ std::string preprocessCode(const std::string& content) {
     return preprocessedContent;
 }
 
-
-
 std::ifstream openReadFile(const std::string_view& fileName)
 {
 	std::ifstream file(fileName.data());
@@ -97,10 +92,8 @@ std::ofstream openWriteFile(const std::string_view& fileName)
 }
 
 std::string getline(std::ifstream& file) {
-	const int LINE_LENGTH = 512;
-	char cline[LINE_LENGTH];
-	file.getline(&cline[0], LINE_LENGTH, '\n');
-	std::string line(cline);
+	std::string line("", 512);
+	file.getline(&line[0], line.size(), '\n');
 	return rtrim(line);
 }
 
