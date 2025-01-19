@@ -2,24 +2,85 @@
 #include "RegexFileParser.hpp"
 #include "sleepiDOX.hpp"
 #include <iostream>
+#include <filesystem>
+
+enum class ScopeResolution {
+    Namespace,
+    Struct,
+    Class
+};
+
+
+// Internal data struct to store metadata about classes, to append them as namespaces to functions
+struct _scopeMatch {
+    const std::string match;
+    const ptrdiff_t pos;
+    const ptrdiff_t len;
+    const ScopeResolution resolution;
+
+    _scopeMatch(const std::string& match, const ptrdiff_t& pos, const ptrdiff_t& len, const ScopeResolution& res)
+        : match(match), pos(pos), len(len), resolution(res)
+    { }
+    _scopeMatch(_scopeMatch&& c) noexcept : match{ c.match }, pos{ c.pos }, len{ c.len }, resolution{ c.resolution } {}
+};
+
+std::vector<_scopeMatch> extractScopeMatches(const std::string& fileContent) {
+    // [CLASS] Separate out the class/struct names, and where they begin and end
+    // This will be used to later add the proper prefixes.
+    // Done by parsing content for any class/struct keywords + {}, and storing class names, as well as where the begin and end
+
+    
+    const std::string CLASS_REGEX = R"((class|struct)\s+([^\d][\w]*)\s*(?::\s*(public|private|protected)?\s*[^\d][\w]*)?\s*\{((?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*)\})";
+    //const auto classMatches = getRegexMatches(fileContent, CLASS_REGEX);
+    std::regex provided_regex(CLASS_REGEX);
+    std::smatch smatch;
+    auto start_iter = fileContent.cbegin();
+    std::vector<_scopeMatch> all_matches;
+    while (std::regex_search(start_iter, fileContent.cend(), smatch, provided_regex)) {
+
+        // UB if std::match_results::ready() == false
+        // (https://en.cppreference.com/w/cpp/regex/match_results/suffix)
+        if (smatch.ready()) {
+            start_iter = smatch[2].second;
+            const ScopeResolution res = (smatch[1] == "class") ? ScopeResolution::Class : ScopeResolution::Struct;
+            all_matches.emplace_back(smatch[2], std::distance(fileContent.cbegin(), start_iter), smatch.length(), res );
+        }
+        else break;
+    }
+
+    // Extract namespaces seperately because apparently std::regex really doesn't like 3 optional expressions in one string
+
+    const std::string NAMESPACE_REGEX = R"(namespace\s+([^\d\W]\w*)\s*\{([^{}]*)\})";
+    //const auto namespaceMatches = getRegexMatches(fileContent, NAMESPACE_REGEX);
+    provided_regex = std::regex(NAMESPACE_REGEX);
+    start_iter = fileContent.cbegin();
+    while (std::regex_search(start_iter, fileContent.cend(), smatch, provided_regex)) {
+        if (smatch.ready()) {
+            start_iter = smatch[1].second;
+            all_matches.emplace_back(smatch[1], std::distance(fileContent.cbegin(), start_iter), smatch.length(), ScopeResolution::Namespace);
+        }
+        else break;
+    }
+    // end of [CLASS]
+    return all_matches;
+}
 
 void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries) {
-    // the only time I found copilot useful
-    const char* CLASS_REGEX = R"((class|struct)\s+([A-Za-z_][A-Za-z_0-9]*)\s*(?::\s*(public|private|protected)?\s*[A-Za-z_][A-Za-z_0-9]*)?\s*\{((?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*)\})";
 
-
-    const auto classMatches = getRegexMatches(fileContent, CLASS_REGEX);
+    
     std::vector< std::string > classNames;
     // Keeps track of where class bodies begin and end, so'd, that when we query for functions
     // we don't include ones that are already within classes.
     std::vector <std::pair <size_t, size_t >> classBodyPositions;
 
-
-    for (const std::smatch& classMatch : classMatches) {
-        classNames.push_back(classMatch[2].str());
-        classBodyPositions.emplace_back(classMatch.prefix().str().length(), classMatch.prefix().str().length() + classMatch.length());
+    for (const auto& classMatch : extractScopeMatches(fileContent)) {
+        classNames.push_back(classMatch.match + "::");
+        classBodyPositions.emplace_back(classMatch.pos, classMatch.pos + classMatch.len);
     }
 
+    
+    // [FUNCTION] Locate any and all occurances of @sleepi[token], and their subsequent function definitions
+    // 
 
     Sleepi::DOXEntry entry;
     const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \t]*@sleepiDOX[\s\S]*?\*\/)|\/\/[ \t]*@sleepiRETURNS[ \t]*([^\n]*)|\/\/[ \t]*@sleepiPARAM[ \t]*([^\n]*)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
@@ -41,39 +102,35 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
 
             // I don't want to add an entry for something that has no documentation
             // And since the only required comment is a @sleepiDOX one, I will filter based on that
-
             if (entry.at(Sleepi::ENTRY_COMMENT).empty()) {
                 entry = {};
                 continue;
             }
 
 
-            std::string functionDefinition = rltrim(match[4].str());
-            std::string functionName = rltrim(match[5].str());
+            std::string functionDefinition = rltrim(match[4].str());    // with return type, additional keywoprds, alladat jazz
+            std::string functionName       = rltrim(match[5].str());    // Just the name
 
             // Checks whether the function is within a class
             std::string className;
-            size_t funcStart = fileContent.find(match[4].str()); // This can accidentally catch something else, so best to replace asap
-            size_t funcEnd = funcStart + match.length();
+            const size_t funcStart = fileContent.find(match[4].str()); // This can accidentally catch something else, so best to replace asap
+            const size_t funcEnd   = funcStart + match.length();
 
             // Check if a function is within a class
             for (size_t index = 0; index < classBodyPositions.size(); ++index) {
                 if (funcStart >= classBodyPositions.at(index).first &&
                     funcEnd <= classBodyPositions.at(index).second) {
-                    className = classNames.at(index);
-                    break;
+                    className += classNames.at(index);
                 }
             }
 
-            if (!className.empty()) {
-                
-                functionDefinition.insert(functionDefinition.find(functionName), className + "::");
-                functionName.insert(0, className + "::");
-
+            if (!className.empty()) {   
+                functionDefinition.insert(functionDefinition.find(functionName), className);
+                functionName.insert(0, className);
             }
 
             entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
-            entry.at(Sleepi::ENTRY_FUNCTION_NAME) = functionName;
+            entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
 
             entries[entry.at(Sleepi::ENTRY_FUNCTION_NAME)].push_back(entry);
             entry = {};
@@ -96,9 +153,17 @@ void documentFile(const std::string& directory, std::string destination = "") {
     generateDocFile(outputFile, entries);
 }
 
-
 int main(const int args, const char* argv[]) {
     // PARSE ARGUMENTS
+    std::cout <<R"(
+  ____  _                 _ ____   _____  __
+ / ___|| | ___  ___ _ __ (_)  _ \ / _ \ \/ /
+ \___ \| |/ _ \/ _ \ '_ \| | | | | | | \  / 
+  ___) | |  __/  __/ |_) | | |_| | |_| /  \ 
+ |____/|_|\___|\___| .__/|_|____/ \___/_/\_\
+                   |_|)" << "\n\n";
+
+    std::cout << "Parsing files...\n";
     std::vector<std::string> arguments(args);
     for (size_t i = 0; i < args; ++i)
         arguments.at(i) = argv[i];
@@ -106,6 +171,8 @@ int main(const int args, const char* argv[]) {
     Sleepi::DOXContext context = extractArguments(arguments);
     if (context.outputFileDir.empty()) {
         for (const std::string& fileDestination : context.sourceDirs) {
+            std::filesystem::path path = fileDestination;
+            std::cout << "Generating " << path.filename().string() << '\n';
             documentFile(fileDestination);
         }
     }
@@ -116,7 +183,8 @@ int main(const int args, const char* argv[]) {
             isolateEntries(extractFileContent(rfile), entries);
         }
         std::ofstream outputFile = openWriteFile(context.outputFileDir);
-        generateDocFile(outputFile, entries);
+        std::cout << "Generating " << context.outputFileDir << '\n';
+        generateDocFile(outputFile, entries, "", "bunch");
     }
     std::cout << "Finsihed!";
 }
