@@ -367,3 +367,5 @@ FodyWeavers.xsd
 /DocTest.hpp
 /DocTest.md
 *.md
+/DocTest.cpp
+/sleepiDOX.vcxproj.filters
