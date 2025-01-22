@@ -10,12 +10,12 @@
 int main(const int args, const char* argv[]) {
   // PARSE ARGUMENTS
   std::cout <<R"(
-  ____  _         _ ____   _____  __
+  ____  _                 _ ____   _____  __
  / ___|| | ___  ___ _ __ (_)  _ \ / _ \ \/ /
  \___ \| |/ _ \/ _ \ '_ \| | | | | | | \  / 
   ___) | |  __/  __/ |_) | | |_| | |_| /  \ 
  |____/|_|\___|\___| .__/|_|____/ \___/_/\_\
-           |_|)" << "\n\n";
+                   |_|)" << "\n\n";
 
   std::cout << "Parsing files...\n";
   std::vector<std::string> arguments(args);
