@@ -54,57 +54,79 @@ std::string getline(std::ifstream& file) {
   return rtrim(line);
 }
 
-std::vector<_scopeMatch> extractScopeMatches(const std::string& fileContent) {
+std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent) {
 
-  std::vector<_scopeMatch> all_matches;
-
-  // Regex that matches classes, class name, and inheritance
-  std::regex scope_regex(R"((class|struct)\s+([^\d][\w]*)\s*(?::\s*(public|private|protected)?\s*[^\d][\w]*)?\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\})");
+  std::vector<Sleepi::DOXScope> all_matches;
   std::smatch smatch;
+
+  // Regex that matches classes, class name, and inheritance. Comment could be false due to lack of updates
+  // [1] - scope type (class or struct)
+  // [2] - scope name
+  // [3] - scope contents
+  std::regex scope_regex(R"((class|struct)\s+([^\d][\w]*)\s*(?::\s*public|private|protected?\s*[^\d][\w]*)?\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\})");
   auto start_iter = fileContent.cbegin();
    
   while (std::regex_search(start_iter, fileContent.cend(), smatch, scope_regex)) {
 
     if (smatch.ready()) {
-      start_iter = smatch[2].second;
-      const ScopeResolution res = (smatch[1] == "class") ? ScopeResolution::Class : ScopeResolution::Struct;
-      all_matches.emplace_back(smatch[2], std::distance(fileContent.cbegin(), start_iter), smatch.length(), res);
+      start_iter = smatch[2].second;                                                 // Iterator is now right after scope name
+      const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);         // This is always non-negative, so later casting to size_t is safe
+      const auto location = std::pair(static_cast<size_t>(pos), smatch[3].length());
+      Sleepi::DOXScope scope{ smatch[2], location };
+
+      // Check to see if it belongs in some other scope
+      // Only checking one scope "above", because if it's double nested,
+      // then the parent will have the highest scope saved already
+      if (!all_matches.empty() &&
+          location.first > all_matches.back().location.first && location.second < all_matches.back().location.second) {
+        scope.parentScope = std::make_shared<Sleepi::DOXScope>(all_matches.back());
+      }
+
+      all_matches.push_back(scope);
     }
     else break;
   }
 
   // Now separately extract namespaces. 
-  scope_regex = std::regex(R"(namespace\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
+  scope_regex = std::regex(R"((namespace)\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
   start_iter = fileContent.cbegin();
   while (std::regex_search(start_iter, fileContent.cend(), smatch, scope_regex)) {
+    
     if (smatch.ready()) {
       start_iter = smatch[1].second;
-      all_matches.emplace_back(smatch[1], std::distance(fileContent.cbegin(), start_iter), smatch.length(), ScopeResolution::Namespace);
+      
+      const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);
+      const auto location = std::pair(static_cast<size_t>(pos), smatch[3].length());
+      Sleepi::DOXScope scope{ smatch[2], location };
+
+      if (!all_matches.empty() &&
+        location.first > all_matches.back().location.first) {
+        scope.parentScope = std::make_shared<Sleepi::DOXScope>(all_matches.back());
+      }
+
+      all_matches.push_back(scope);
     }
     else break;
   }
+
   return all_matches;
+
+  // Appendix:
+  // The reason why namespaces are parsed seperately is because when I initially added "namespace" as an option alongside "class|struct"
+  // It would inexplicably cause a std::regex_error::error_stack regardless of how much I simplified the regex.
+  // This behavior did not translate to my other machine, hence I didn't really bother fixing it,
+  // and instead opted to parse it separately. Later on I will reattempt to combine both regexes to save time and memory.
+
 }
 
 void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries) {
 
-
-  std::vector< std::shared_ptr<std::string> > scopeNames;
-  // Keeps track of where class bodies begin and end, so'd, that when we query for functions
-  // we don't include ones that are already within classes.
-  std::vector <std::pair <size_t, size_t >> scopeBodyPositions;
-
-  for (const auto& classMatch : extractScopeMatches(fileContent)) {
-    scopeNames.push_back( std::make_shared<std::string>(classMatch.match + "::") );
-    scopeBodyPositions.emplace_back(classMatch.pos, classMatch.pos + classMatch.len);
-  }
+  std::vector<Sleepi::DOXScope> scopes = extractScopeMatches(fileContent);
 
   Sleepi::DOXEntry entry;
   const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \n\t]*@sleepiDOX[\s\S]*?\*\/)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
   const auto functionMatches = getRegexMatches(fileContent, FUNCTION_REGEX);
   for (const std::smatch& match : functionMatches) {
-
-
 
     if (match[1].matched) {
       entry.at(Sleepi::ENTRY_COMMENT) += commentTrim(match[1].str(), "@sleepiDOX");
@@ -120,31 +142,51 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
 
 
       std::string functionDefinition = rltrim(match[2].str());  // with return type, additional keywoprds, alladat jazz
-      std::string functionName = rltrim(match[3].str());
+      std::string functionName       = rltrim(match[3].str());
 
-      // Checks whether the function is within a class
-      std::string className; 
+      Sleepi::DOXFunction function{ functionName, {}, {} };
+
+      // Tries to find the last scope that encompasses the function
+      // This will end up being the most inner scope, which is saved as the index into the
+      // Scope vector. Afterwards the scope in that index is cast as a pointer and the Sleepi::DOXFunction is complete.
       const size_t funcStart = std::distance(fileContent.cbegin(), match.prefix().second);
-      const size_t funcEnd   = funcStart + match.length();
+      const size_t funcLen   = match.length();
 
-      // Check if a function is within a class
-      for (size_t index = 0; index < scopeBodyPositions.size(); ++index) {
-        if (funcStart >= scopeBodyPositions.at(index).first &&
-          funcEnd <= scopeBodyPositions.at(index).second) {
-          className += *scopeNames.at(index);
+      int counter{0}, index{ -1 };
+      for (const Sleepi::DOXScope& scope : scopes) {
+        if (funcStart >= scope.location.first && funcLen < scope.location.second) {
+          index = counter;
         }
+        ++counter;
       }
 
-      if (!className.empty()) {
+      if (index != -1)
+        function.scope = std::make_shared<Sleepi::DOXScope>(scopes.at(index));
+
+
+      if (const std::string className = getScopeSyntax(function); !className.empty()) {
         functionDefinition.insert(functionDefinition.find(functionName), className);
         functionName.insert(0, className);
       }
 
       entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
-      entry.at(Sleepi::ENTRY_FUNCTION_NAME) = functionName;
+      entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
 
-      entries[entry.at(Sleepi::ENTRY_FUNCTION_NAME)].push_back(entry);
+      entries.emplace_back(entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION), entry);
       entry = {};
     }
   }
+}
+
+std::string getScopeSyntax(const Sleepi::DOXFunction& function) {
+  std::string syntax = "";
+  auto scope = function.scope;
+  while (scope) {
+    syntax.insert(0, scope->scopeName + "::");
+    scope = scope->parentScope;
+  }
+  if (!syntax.empty())
+    syntax += "::";
+
+  return syntax;
 }

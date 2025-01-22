@@ -5,24 +5,7 @@
 #include "sleepiDOX.hpp"
 
 
-enum class ScopeResolution {
-  Namespace,
-  Struct,
-  Class
-};
 
-// Internal data struct to store metadata about classes, to append them as namespaces to functions
-struct _scopeMatch {
-  const std::string match;
-  const ptrdiff_t pos;
-  const ptrdiff_t len;
-  const ScopeResolution resolution;
-
-  _scopeMatch(const std::string& match, const ptrdiff_t& pos, const ptrdiff_t& len, const ScopeResolution& res)
-  : match(match), pos(pos), len(len), resolution(res) { }
-
-  _scopeMatch(_scopeMatch&& c) noexcept : match{ c.match }, pos{ c.pos }, len{ c.len }, resolution{ c.resolution } {}
-};
 
 
 // @sleepiDOX A function to find and extract all substrings that match a provided regex.
@@ -43,8 +26,11 @@ std::string extractFileContent(const std::ifstream& file_stream);
 // @sleepiRETURNS a valid `std::ofstream`
 std::ofstream openWriteFile(const std::string_view& fileName);
 
-std::vector<_scopeMatch> extractScopeMatches(const std::string& fileContent);
+std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent);
+
 void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries);
+
+std::string getScopeSyntax(const Sleepi::DOXFunction& function);
 
 // not gonna comment...
 std::string getline(std::ifstream& file);
