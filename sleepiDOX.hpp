@@ -15,20 +15,35 @@ namespace Sleepi {
 
   // Error bits used in `extractArguments`
   namespace ErrorBits {
-  constexpr size_t InputDirDoesntExist = 0x01;
-  constexpr size_t NoInputSpecified = 0x02;
-  constexpr size_t NoInputFilesFound = 0x04;
-  constexpr size_t NoOutputFileSpecified = 0x08;
+    constexpr size_t InputDirDoesntExist = 0x01;
+    constexpr size_t NoInputSpecified = 0x02;
+    constexpr size_t NoInputFilesFound = 0x04;
+    constexpr size_t NoOutputFileSpecified = 0x08;
   };
   
 
   using DOXEntry = std::array<std::string, 5>;
-  using DOXContainer = std::unordered_map< std::string, std::vector <DOXEntry> >;
+ 
+
   struct DOXContext {
-  std::vector<std::string> sourceDirs;
-  std::string outputFileDir;
-  size_t errorFlags;
+    std::vector<std::string> sourceDirs;
+    std::string outputFileDir;
+    size_t errorFlags;
   };
+
+  struct DOXScope {
+    const std::string scopeName;
+    const std::pair<size_t, size_t> location;         // Should be used as (pos, len)
+    std::shared_ptr<DOXScope> parentScope{ nullptr };  // a linked list... in real life...
+  };
+
+  struct DOXFunction {
+    const std::string name;
+    DOXEntry entry;
+    std::shared_ptr<DOXScope> scope;
+  };
+
+  using DOXContainer = std::vector<DOXFunction>;
 };
 
 /*

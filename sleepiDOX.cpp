@@ -114,9 +114,8 @@ void generateTOE(std::ofstream& output_file, const Sleepi::DOXContainer& entries
 
   output_file << "## Table of contents : \n";
   size_t index = 1;
-  for (const auto& [name, entry] : entries) {
-  for (const auto& single_entry : entry) {
-      std::string functionDefinition = single_entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+  for (const auto& [name, entry, scope] : entries) {
+      std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
 
       // Markdown really doesn't like these in a header
@@ -126,7 +125,6 @@ void generateTOE(std::ofstream& output_file, const Sleepi::DOXContainer& entries
       // Making headers ID'd from 1 to n
       output_file << "- [" << functionDefinition
         << "](#" << index++ << ")\n";
-    }
   } output_file << "- - -\n";
 }
 
@@ -144,30 +142,25 @@ void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& ent
   generateTOE(output_file, entries, title);
 
   size_t index = 1;
-  for (const auto& [name, entry] : entries) {
+  for (const auto& [name, entry, scope] : entries) {
 
-    for (const auto& entry_details : entry) {
-
-      std::string functionDefinition = entry_details.at(ENTRY_FUNCTION_DEFINTION);
+      std::string functionDefinition = entry.at(ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
 
       output_file << "<h3 id=\"" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
       output_file << "`" << source_name << "`" << MD_NL;
-      output_file << H3 << "Description:" << MD_NL << entry_details.at(ENTRY_COMMENT) << MD_NL;
+      output_file << H3 << "Description:" << MD_NL << entry.at(ENTRY_COMMENT) << MD_NL;
       
-      if (!entry_details.at(ENTRY_PARAMS).empty()) {
+      if (!entry.at(ENTRY_PARAMS).empty()) {
         output_file << H3 << "Params:" << MD_NL;
-        output_file << entry_details.at(ENTRY_PARAMS) << MD_NL;
+        output_file << entry.at(ENTRY_PARAMS) << MD_NL;
       }
 
-      if (!entry_details.at(ENTRY_RETURNS).empty()) {
+      if (!entry.at(ENTRY_RETURNS).empty()) {
         output_file << H3 << "Returns:" << MD_NL;
-        output_file << entry_details.at(ENTRY_RETURNS) << MD_NL;
+        output_file << entry.at(ENTRY_RETURNS) << MD_NL;
       }
-
-      output_file << MD_NL;
-    }
-    output_file << "- - -" << MD_NL;
+    output_file << "\n- - -" << MD_NL;
   }
 
 
