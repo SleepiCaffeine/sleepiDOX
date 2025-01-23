@@ -30,7 +30,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
 
 void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries);
 
-std::string getScopeSyntax(const Sleepi::DOXFunction& function);
+std::string getScopeSyntax(const Sleepi::DOXScope& scope);
 
 // not gonna comment...
 std::string getline(std::ifstream& file);

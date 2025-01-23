@@ -30,32 +30,31 @@ namespace Sleepi {
     std::string outputFileDir;
     size_t errorFlags;
   };
-
-  struct DOXScope {
-    const std::string scopeName;
-    const std::pair<size_t, size_t> location;         // Should be used as (pos, len)
-    std::shared_ptr<DOXScope> parentScope{ nullptr };  // a linked list... in real life...
-  };
-
   struct DOXFunction {
     const std::string name;
     DOXEntry entry;
-    std::shared_ptr<DOXScope> scope;
   };
 
-  using DOXContainer = std::vector<DOXFunction>;
-};
+  using DOXContainer = std::vector< std::shared_ptr<DOXFunction> >;
+
+  struct DOXScope {
+    const std::string scopeName;
+    const std::pair<size_t, size_t> location;           // Should be used as (pos, len)
+    std::shared_ptr<DOXScope> parentScope{ nullptr };   // a linked list... in real life...
+    DOXContainer functions;
+  };
+
+  };
 
 /*
 @sleepiDOX Extracts the command-line arguments passed in. The flags are:
-- d  : output file destrination/directory.
-- s  : a single source file that will be parsed.
-- fs : directory (relative to the executable) that contains header files to be parsed. Header files include *.hpp and *.h files.
+- -d  : output file destrination/directory.
+- -s  : a single source file that will be parsed.
+- -fs : directory (relative to the executable) that contains header files to be parsed. Header files include *.hpp and *.h files.
 #### Parameters:
-- argv   : vector of std::string arguments passed through the command line
-- rfile  : string that will contain input file.
-- wfile  : string that will contain output file.
-- strict : boolean that determines whether this function will throw exceptions. Set this to false if you want to handle errors in `Sleepi::DOXContext::errorFlags` differently.  #### Returns:
+- argv   : vector of std::string arguments passed through the command lineW
+- strict : boolean that determines whether this function will throw exceptions. Set this to false if you want to handle errors in `Sleepi::DOXContext::errorFlags` differently.
+#### Returns:
 a `Sleepi::DOXContext` that contains parsed input/output file names.
 */
 Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const bool strict = true);
@@ -77,7 +76,7 @@ void validateContext(const Sleepi::DOXContext& context);
 - title *(optional)*: Text at the top of the page, at header level 1
 - source_name *(optional)*: filename (or any comment) that will be added next to function descriptions to show which file they come from.
 */
-void generateDocFile(std::ofstream& outputFile, const Sleepi::DOXContainer& entries, const std::string_view& title = "", const std::string_view& source_name = "");
+void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, const std::string_view& title = "", const std::string_view& source_name = "");
 
 
 void documentFile(const std::string& directory, std::string destination = "");
