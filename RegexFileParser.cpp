@@ -54,6 +54,7 @@ std::string getline(std::ifstream& file) {
   return rtrim(line);
 }
 
+
 std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent) {
 
   std::vector<Sleepi::DOXScope> all_matches;
@@ -71,7 +72,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
     if (smatch.ready()) {
       start_iter = smatch[2].second;                                                 // Iterator is now right after scope name
       const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);         // This is always non-negative, so later casting to size_t is safe
-      const auto location = std::pair(static_cast<size_t>(pos), smatch[3].length());
+      const auto location = std::pair(static_cast<size_t>(pos), smatch[2].length() + smatch[3].length());
       Sleepi::DOXScope scope{ smatch[2], location };
 
       // Check to see if it belongs in some other scope
@@ -144,46 +145,51 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
       std::string functionDefinition = rltrim(match[2].str());  // with return type, additional keywoprds, alladat jazz
       std::string functionName       = rltrim(match[3].str());
 
-      Sleepi::DOXFunction function{ functionName, {}, {} };
+      auto function = std::make_shared<Sleepi::DOXFunction>(functionName, entry);
 
       // Tries to find the last scope that encompasses the function
       // This will end up being the most inner scope, which is saved as the index into the
       // Scope vector. Afterwards the scope in that index is cast as a pointer and the Sleepi::DOXFunction is complete.
-      const size_t funcStart = std::distance(fileContent.cbegin(), match.prefix().second);
-      const size_t funcLen   = match.length();
+      const size_t funcStart = static_cast<size_t>(std::distance(fileContent.cbegin(), match[2].first));
+      const size_t funcEnd   = funcStart + match[2].length();
 
       int counter{0}, index{ -1 };
       for (const Sleepi::DOXScope& scope : scopes) {
-        if (funcStart >= scope.location.first && funcLen < scope.location.second) {
+        const auto scopeEnd = scope.location.first + scope.location.second;
+        if (funcStart >= scope.location.first && funcEnd <= scopeEnd) {
           index = counter;
         }
         ++counter;
       }
 
-      if (index != -1)
-        function.scope = std::make_shared<Sleepi::DOXScope>(scopes.at(index));
+      std::string className;
 
+      if (index != -1) {
+        scopes.at(index).functions.push_back(function);
+        className = getScopeSyntax(scopes.at(index));
+      }
+      
 
-      if (const std::string className = getScopeSyntax(function); !className.empty()) {
+      if (!className.empty()) {
         functionDefinition.insert(functionDefinition.find(functionName), className);
         functionName.insert(0, className);
       }
 
-      entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
-      entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
+      function->entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
+      function->entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
 
-      entries.emplace_back(entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION), entry);
+      entries.push_back(function);
       entry = {};
     }
   }
 }
 
-std::string getScopeSyntax(const Sleepi::DOXFunction& function) {
-  std::string syntax = "";
-  auto scope = function.scope;
-  while (scope) {
-    syntax.insert(0, scope->scopeName + "::");
-    scope = scope->parentScope;
+std::string getScopeSyntax(const Sleepi::DOXScope& scope) {
+  std::string syntax = scope.scopeName;
+  auto _scope = scope.parentScope;
+  while (_scope) {
+    syntax.insert(0, _scope->scopeName + "::");
+    _scope = _scope->parentScope;
   }
   if (!syntax.empty())
     syntax += "::";

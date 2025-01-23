@@ -108,14 +108,31 @@ std::string replaceString(std::string& source, const std::string_view& search, c
   return source;
 }
 
-void generateTOE(std::ofstream& output_file, const Sleepi::DOXContainer& entries, const std::string_view& title = "") {
+// False - lhs is first
+// True - rhs is first, or they're the same
+bool alphabeticalCompare(const std::string_view& lhs, const std::string_view& rhs) {
+  return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+}
+
+bool compareScopes(const Sleepi::DOXScope& lhs, const Sleepi::DOXScope& rhs) noexcept {
+  return alphabeticalCompare(lhs.scopeName, rhs.scopeName);
+}
+bool compareFunctions(const std::shared_ptr<Sleepi::DOXFunction>& lhs, const std::shared_ptr<Sleepi::DOXFunction>& rhs) noexcept {
+  return alphabeticalCompare(lhs->name, rhs->name);
+}
+
+void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, const std::string_view& title = "") {
   if (!title.empty())
   output_file << "# " << title << "\n\n";
 
   output_file << "## Table of contents : \n";
   size_t index = 1;
-  for (const auto& [name, entry, scope] : entries) {
-      std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+
+  std::sort(entries.begin(), entries.end(), compareFunctions);
+
+  for (const std::shared_ptr<Sleepi::DOXFunction> func : entries) {
+
+      std::string functionDefinition = func->entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
 
       // Markdown really doesn't like these in a header
@@ -128,7 +145,7 @@ void generateTOE(std::ofstream& output_file, const Sleepi::DOXContainer& entries
   } output_file << "- - -\n";
 }
 
-void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& entries, const std::string_view& title, const std::string_view& source_name){
+void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, const std::string_view& title, const std::string_view& source_name){
 
   using namespace Sleepi;
 
@@ -142,8 +159,8 @@ void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& ent
   generateTOE(output_file, entries, title);
 
   size_t index = 1;
-  for (const auto& [name, entry, scope] : entries) {
-
+  for (const auto& func : entries) {
+    const auto entry = func->entry;
       std::string functionDefinition = entry.at(ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
 
@@ -166,7 +183,6 @@ void generateDocFile(std::ofstream& output_file, const Sleepi::DOXContainer& ent
 
   output_file << MD_NL << "<p style=\"font-size : 12;\">Made using <a href=\"https://github.com/SleepiCaffeine/sleepiDOX\">sleepiDOX</a></p>";
 }
-
 
 void documentFile(const std::string& directory, std::string destination) {
   std::ifstream rfile = openReadFile(directory);
