@@ -117,35 +117,55 @@ bool alphabeticalCompare(const std::string_view& lhs, const std::string_view& rh
 bool compareScopes(const Sleepi::DOXScope& lhs, const Sleepi::DOXScope& rhs) noexcept {
   return alphabeticalCompare(lhs.scopeName, rhs.scopeName);
 }
-bool compareFunctions(const std::shared_ptr<Sleepi::DOXFunction>& lhs, const std::shared_ptr<Sleepi::DOXFunction>& rhs) noexcept {
-  return alphabeticalCompare(lhs->name, rhs->name);
+bool compareFunctions(const Sleepi::DOXFunction& lhs, const Sleepi::DOXFunction& rhs) noexcept {
+  return alphabeticalCompare(lhs.name, rhs.name);
 }
 
-void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, const std::string_view& title = "") {
+void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "") {
+  
   if (!title.empty())
-  output_file << "# " << title << "\n\n";
+    output_file << "# " << title << "\n\n";
 
   output_file << "## Table of contents : \n";
   size_t index = 1;
 
+  std::sort(scopes.begin(), scopes.end(), compareScopes);
   std::sort(entries.begin(), entries.end(), compareFunctions);
 
-  for (const std::shared_ptr<Sleepi::DOXFunction> func : entries) {
+  // First print every class/namespace available:
+  for (const Sleepi::DOXScope& scope : scopes) {
+    output_file << "- [" << scope.scopeName << "](#" << index++ << ")\n";
+  } output_file << "\n- - -\n";
+  
+  index = 0;
+  // Now for each class, add all of their function links:
+  for (const Sleepi::DOXScope& scope : scopes) {
+    
+    output_file << "### " << scope.scopeName << "\n\n";
+    
+    for (const Sleepi::DOXFunction& func : entries) {
+      ++index;
+      if (!func.scope || func.scope.get()->scopeName != scope.scopeName)
+        continue;
 
-      std::string functionDefinition = func->entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+
+      std::string functionDefinition = func.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
+      // Remove scope, because why would you need one?
+      const std::string scope_syntax = getScopeSyntax(scope);
+      auto pos = functionDefinition.find( getScopeSyntax(scope) );
+      functionDefinition.erase(pos, scope_syntax.length());
 
       // Markdown really doesn't like these in a header
       replaceString(functionDefinition, "<", "\\<");
       replaceString(functionDefinition, ">", "\\>");
+      output_file << "- [" << functionDefinition << "](#f" << index << ")\n";
+    }
+  } output_file << "\n- - -\n";
 
-      // Making headers ID'd from 1 to n
-      output_file << "- [" << functionDefinition
-        << "](#" << index++ << ")\n";
-  } output_file << "- - -\n";
 }
 
-void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, const std::string_view& title, const std::string_view& source_name){
+void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title, const std::string_view& source_name){
 
   using namespace Sleepi;
 
@@ -156,18 +176,24 @@ void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, 
   constexpr char H3[] = "### ";
 
 
-  generateTOE(output_file, entries, title);
+  generateTOE(output_file, entries, scopes, title);
 
-  size_t index = 1;
-  for (const auto& func : entries) {
-    const auto entry = func->entry;
-      std::string functionDefinition = entry.at(ENTRY_FUNCTION_DEFINTION);
+  size_t index = 0;
+  for (const auto& scope : scopes)
+  {
+    for (const auto& func : entries) {
+      ++index;
+      if (!func.scope || func.scope.get()->scopeName != scope.scopeName)
+        continue;
+
+      const auto entry = func.entry;
+      std::string functionDefinition = func.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
 
-      output_file << "<h3 id=\"" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
+      output_file << "<h3 id=\"f" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
       output_file << "`" << source_name << "`" << MD_NL;
       output_file << H3 << "Description:" << MD_NL << entry.at(ENTRY_COMMENT) << MD_NL;
-      
+
       if (!entry.at(ENTRY_PARAMS).empty()) {
         output_file << H3 << "Params:" << MD_NL;
         output_file << entry.at(ENTRY_PARAMS) << MD_NL;
@@ -177,7 +203,8 @@ void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, 
         output_file << H3 << "Returns:" << MD_NL;
         output_file << entry.at(ENTRY_RETURNS) << MD_NL;
       }
-    output_file << "\n- - -" << MD_NL;
+      output_file << "\n- - -" << MD_NL;
+    }
   }
 
 
@@ -187,13 +214,42 @@ void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, 
 void documentFile(const std::string& directory, std::string destination) {
   std::ifstream rfile = openReadFile(directory);
   Sleepi::DOXContainer entries;
-  isolateEntries(extractFileContent(rfile), entries);
+  std::vector<Sleepi::DOXScope> scopes = isolateEntries(extractFileContent(rfile), entries);
 
   // Make output in the same destination as input, just with the .md extension
   if (destination.empty()) {
     destination = directory;
     destination.replace(destination.find_last_of('.'), std::string::npos, ".md");
   }
+
   std::ofstream outputFile = openWriteFile(destination);
-  generateDocFile(outputFile, entries);
+  generateDocFile(outputFile, entries, scopes);
 }
+
+
+
+Sleepi::DOXScope& Sleepi::DOXScope::operator=(const DOXScope& scope)
+{
+  this->scopeName   = scope.scopeName;
+  this->location    = scope.location;
+  this->parentScope = scope.parentScope;
+
+  return *this;
+}
+
+Sleepi::DOXFunction& Sleepi::DOXFunction::operator=(const DOXFunction& func)
+{
+  this->name = func.name;
+  this->entry = func.entry;
+  this->scope = func.scope;
+
+  return *this;
+}
+
+Sleepi::DOXScope::DOXScope(const std::string_view& name, const std::pair<size_t, size_t> loc) noexcept
+  : scopeName{ name }, location{ loc }, parentScope{nullptr}
+{ }
+
+Sleepi::DOXFunction::DOXFunction(const std::string name, const DOXEntry& entry) noexcept
+  : name{ name }, entry{ entry }, scope{nullptr}
+{ }
