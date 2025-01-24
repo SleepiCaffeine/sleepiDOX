@@ -73,7 +73,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
       start_iter = smatch[2].second;                                                 // Iterator is now right after scope name
       const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);         // This is always non-negative, so later casting to size_t is safe
       const auto location = std::pair(static_cast<size_t>(pos), smatch[2].length() + smatch[3].length());
-      Sleepi::DOXScope scope{ smatch[2], location };
+      Sleepi::DOXScope scope( smatch[2].str(), location);
 
       // Check to see if it belongs in some other scope
       // Only checking one scope "above", because if it's double nested,
@@ -89,7 +89,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
   }
 
   // Now separately extract namespaces. 
-  scope_regex = std::regex(R"((namespace)\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
+  scope_regex = std::regex(R"([\w]*(namespace)\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
   start_iter = fileContent.cbegin();
   while (std::regex_search(start_iter, fileContent.cend(), smatch, scope_regex)) {
     
@@ -98,7 +98,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
       
       const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);
       const auto location = std::pair(static_cast<size_t>(pos), smatch[3].length());
-      Sleepi::DOXScope scope{ smatch[2], location };
+      Sleepi::DOXScope scope{ smatch[2].str(), location};
 
       if (!all_matches.empty() &&
         location.first > all_matches.back().location.first) {
@@ -120,7 +120,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
 
 }
 
-void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries) {
+std::vector<Sleepi::DOXScope> isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries) {
 
   std::vector<Sleepi::DOXScope> scopes = extractScopeMatches(fileContent);
 
@@ -145,7 +145,7 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
       std::string functionDefinition = rltrim(match[2].str());  // with return type, additional keywoprds, alladat jazz
       std::string functionName       = rltrim(match[3].str());
 
-      auto function = std::make_shared<Sleepi::DOXFunction>(functionName, entry);
+      Sleepi::DOXFunction function{ functionName, entry };
 
       // Tries to find the last scope that encompasses the function
       // This will end up being the most inner scope, which is saved as the index into the
@@ -165,7 +165,7 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
       std::string className;
 
       if (index != -1) {
-        scopes.at(index).functions.push_back(function);
+        function.scope = std::make_shared<Sleepi::DOXScope>(scopes.at(index));
         className = getScopeSyntax(scopes.at(index));
       }
       
@@ -175,13 +175,15 @@ void isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entrie
         functionName.insert(0, className);
       }
 
-      function->entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
-      function->entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
+      function.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
+      function.entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
 
       entries.push_back(function);
       entry = {};
     }
   }
+
+  return scopes;
 }
 
 std::string getScopeSyntax(const Sleepi::DOXScope& scope) {
