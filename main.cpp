@@ -20,25 +20,33 @@ int main(const int args, const char* argv[]) {
   std::cout << "Parsing files...\n";
   std::vector<std::string> arguments(args);
   for (size_t i = 0; i < args; ++i)
-  arguments.at(i) = argv[i];
+    arguments.at(i) = argv[i];
 
-  Sleepi::DOXContext context = extractArguments(arguments);
-  if (context.outputFileDir.empty()) {
-  for (const std::string& fileDestination : context.sourceDirs) {
-    std::filesystem::path path = fileDestination;
-    std::cout << "Generating " << path.filename().string() << '\n';
-    documentFile(fileDestination);
-  }
+    Sleepi::DOXContext context = extractArguments(arguments);
+    if (context.outputFileDir.empty()) {
+    for (const std::string& fileDestination : context.sourceDirs) {
+      std::filesystem::path path = fileDestination;
+      std::cout << "Generating " << path.filename().string() << '\n';
+      documentFile(fileDestination);
+   }
   }
   else {
-  Sleepi::DOXContainer entries;
-  for (const std::string& dir : context.sourceDirs) {
-    std::ifstream rfile = openReadFile(dir);
-    isolateEntries(extractFileContent(rfile), entries);
-  }
-  std::ofstream outputFile = openWriteFile(context.outputFileDir);
-  std::cout << "Generating " << context.outputFileDir << '\n';
-  generateDocFile(outputFile, entries, "", "bunch");
+    Sleepi::DOXContainer entries;
+    std::vector < Sleepi::DOXScope > scopes;
+
+    // this acts as "global scope"
+    scopes.emplace_back("!", 0, -1);
+
+
+    for (const std::string& dir : context.sourceDirs) {
+      std::ifstream rfile = openReadFile(dir);
+      const auto new_scopes = isolateEntries(extractFileContent(rfile), entries);
+      scopes.insert(scopes.end(), new_scopes.cbegin(), new_scopes.cend());
+    }
+    std::ofstream outputFile = openWriteFile(context.outputFileDir);
+    std::cout << "Generating " << context.outputFileDir << '\n';
+    generateDocFile(outputFile, entries, scopes, "", "bunch");
+
   }
   std::cout << "Finsihed!";
 }
