@@ -21,28 +21,77 @@ namespace Sleepi {
     constexpr size_t NoOutputFileSpecified = 0x08;
   };
   
+  const char GLOBAL_SCOPE = '!';
+
+  /* 
+  Reference guide for the different types:
+    - DOXEntry keeps all the comments, and needs to be rewritten NOW.
+      Since there are multiple "function name" variables, this is how they are saved:
+      Example function - "CustomType SomeScope::function(int& a);"
+        - DOXEntry.at(ENTRY_FUNCTION_DEFINITION) = "CustomType SomeScope::function(int& a);"
+        - DOXEntry.at(ENTRY_FUNCTION_NAME)       = "SomeScope::function"
+        - DOXFunction::name                      = "function"
+        
+      Each is saved for different purposes.
+
+    - DOXContext saves information about which files should be parsed, how, and where.
+      
+    - DOXFunction saves information about a specific function definition,
+        mainly name, and comments.
+
+    - DOXContainer is a vector of functions. DOXScopes use this to know which functions belong to it.
+        The reason this is done is so the functions belonging to a specific scope could be immediately
+        pushed to the output file, rather than requiring to loop over every function found within that file
+        and checking whether each function belongs to that class.
+        Although that's not a terrible idea....
+
+        Both strategies:
+        1) Each scope stores its own function:
+          - Have to sort multiple times
+          - Instant access
+        2) Only pointer to scope
+          - Can sort entire function list once
+          - Have to loop over whole list for each entry
+
+  */
+
+
 
   using DOXEntry = std::array<std::string, 5>;
- 
 
   struct DOXContext {
     std::vector<std::string> sourceDirs;
     std::string outputFileDir;
     size_t errorFlags;
   };
-  struct DOXFunction {
-    const std::string name;
-    DOXEntry entry;
-  };
-
-  using DOXContainer = std::vector< std::shared_ptr<DOXFunction> >;
-
+  
   struct DOXScope {
-    const std::string scopeName;
-    const std::pair<size_t, size_t> location;           // Should be used as (pos, len)
-    std::shared_ptr<DOXScope> parentScope{ nullptr };   // a linked list... in real life...
-    DOXContainer functions;
+    std::string scopeName;
+    std::pair<size_t, size_t> location;           // Should be used as (pos, len)
+    std::shared_ptr<DOXScope> parentScope{nullptr};     // a linked list... in real life...
+
+    ~DOXScope() = default;
+    DOXScope(const std::string_view& name, const std::pair<size_t, size_t> loc) noexcept;
+    DOXScope(DOXScope const&) = default;
+    DOXScope(DOXScope&&) = default;
+    DOXScope& operator=(const DOXScope& other);
+    DOXScope& operator=(DOXScope&& other) noexcept = default;
   };
+
+  struct DOXFunction {
+    std::string name;
+    DOXEntry entry;
+    std::shared_ptr<DOXScope> scope;
+
+    ~DOXFunction() = default;
+    DOXFunction(const std::string name, const DOXEntry& entry) noexcept;
+    DOXFunction(DOXFunction const&) = default;
+    DOXFunction(DOXFunction&&) = default;
+    DOXFunction& operator=(const DOXFunction& other);
+    DOXFunction& operator=(DOXFunction&& other) noexcept = default;
+  };
+
+  using DOXContainer = std::vector<DOXFunction>;
 
   };
 
@@ -76,7 +125,7 @@ void validateContext(const Sleepi::DOXContext& context);
 - title *(optional)*: Text at the top of the page, at header level 1
 - source_name *(optional)*: filename (or any comment) that will be added next to function descriptions to show which file they come from.
 */
-void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, const std::string_view& title = "", const std::string_view& source_name = "");
+void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "", const std::string_view& source_name = "");
 
 
 void documentFile(const std::string& directory, std::string destination = "");
