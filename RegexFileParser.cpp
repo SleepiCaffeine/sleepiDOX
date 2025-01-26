@@ -89,7 +89,7 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
   }
 
   // Now separately extract namespaces. 
-  scope_regex = std::regex(R"([\w]*(namespace)\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
+  scope_regex = std::regex(R"((namespace)\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
   start_iter = fileContent.cbegin();
   while (std::regex_search(start_iter, fileContent.cend(), smatch, scope_regex)) {
     
@@ -120,10 +120,9 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
 
 }
 
-std::vector<Sleepi::DOXScope> isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries) {
+Sleepi::DOXContainer isolateEntries(const std::string& fileContent) {
 
-  std::vector<Sleepi::DOXScope> scopes = extractScopeMatches(fileContent);
-
+  Sleepi::DOXContainer entries;
   Sleepi::DOXEntry entry;
   const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \n\t]*@sleepiDOX[\s\S]*?\*\/)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
   const auto functionMatches = getRegexMatches(fileContent, FUNCTION_REGEX);
@@ -147,33 +146,8 @@ std::vector<Sleepi::DOXScope> isolateEntries(const std::string& fileContent, Sle
 
       Sleepi::DOXFunction function{ functionName, entry };
 
-      // Tries to find the last scope that encompasses the function
-      // This will end up being the most inner scope, which is saved as the index into the
-      // Scope vector. Afterwards the scope in that index is cast as a pointer and the Sleepi::DOXFunction is complete.
-      const size_t funcStart = static_cast<size_t>(std::distance(fileContent.cbegin(), match[2].first));
-      const size_t funcEnd   = funcStart + match[2].length();
-
-      int counter{0}, index{ -1 };
-      for (const Sleepi::DOXScope& scope : scopes) {
-        const auto scopeEnd = scope.location.first + scope.location.second;
-        if (funcStart >= scope.location.first && funcEnd <= scopeEnd) {
-          index = counter;
-        }
-        ++counter;
-      }
-
-      std::string className;
-
-      if (index != -1) {
-        function.scope = std::make_shared<Sleepi::DOXScope>(scopes.at(index));
-        className = getScopeSyntax(scopes.at(index));
-      }
-      
-
-      if (!className.empty()) {
-        functionDefinition.insert(functionDefinition.find(functionName), className);
-        functionName.insert(0, className);
-      }
+      function.location.first  = static_cast<size_t>(std::distance(fileContent.cbegin(), match[2].first));
+      function.location.second = match[2].length();
 
       function.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION) = functionDefinition;
       function.entry.at(Sleepi::ENTRY_FUNCTION_NAME)      = functionName;
@@ -183,7 +157,7 @@ std::vector<Sleepi::DOXScope> isolateEntries(const std::string& fileContent, Sle
     }
   }
 
-  return scopes;
+  return entries;
 }
 
 std::string getScopeSyntax(const Sleepi::DOXScope& scope) {
@@ -197,4 +171,44 @@ std::string getScopeSyntax(const Sleepi::DOXScope& scope) {
     syntax += "::";
 
   return syntax;
+}
+
+void assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleepi::DOXScope>& scopes) {
+
+  // Tries to find the last scope that encompasses the function
+  // This will end up being the most inner scope, which is saved as the index into the
+  // Scope vector. Afterwards the scope in that index is cast as a pointer and the Sleepi::DOXFunction is complete.
+
+
+  
+  for (Sleepi::DOXFunction& function : functions) {
+    int counter{ 0 }, index{ -1 };
+    const auto funcEnd = function.location.first + function.location.second;
+
+    for (const Sleepi::DOXScope& scope : scopes) {
+      const auto scopeEnd = scope.location.first + scope.location.second;
+
+      if (function.location.first >= scope.location.first && funcEnd <= scopeEnd) {
+        index = counter;
+      }
+      ++counter;
+    }
+  
+
+    std::string className;
+
+    if (index != -1) {
+      function.scope = std::make_shared<Sleepi::DOXScope>(scopes.at(index));
+      className      = getScopeSyntax(scopes.at(index));
+    }
+
+
+    if (!className.empty()) {
+      std::string& functionDefinition = function.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+      std::string& functionName       = function.entry.at(Sleepi::ENTRY_FUNCTION_NAME);
+
+      functionDefinition.insert(functionDefinition.find(functionName), className);
+      functionName.insert(0, className);
+    }
+  }
 }
