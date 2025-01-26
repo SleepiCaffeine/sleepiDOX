@@ -28,9 +28,11 @@ std::ofstream openWriteFile(const std::string_view& fileName);
 
 std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent);
 
-std::vector<Sleepi::DOXScope> isolateEntries(const std::string& fileContent, Sleepi::DOXContainer& entries);
+Sleepi::DOXContainer isolateEntries(const std::string& fileContent);
 
 std::string getScopeSyntax(const Sleepi::DOXScope& scope);
+
+void assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleepi::DOXScope>& scopes);
 
 // not gonna comment...
 std::string getline(std::ifstream& file);
