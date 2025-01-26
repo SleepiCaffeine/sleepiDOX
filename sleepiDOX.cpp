@@ -129,9 +129,6 @@ void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, std:
   output_file << "## Table of contents : \n";
   size_t index = 1;
 
-  std::sort(scopes.begin(), scopes.end(), compareScopes);
-  std::sort(entries.begin(), entries.end(), compareFunctions);
-
   // First print every class/namespace available:
   for (const Sleepi::DOXScope& scope : scopes) {
     output_file << "- [" << scope.scopeName << "](#" << index++ << ")\n";
@@ -186,35 +183,25 @@ void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, 
       if (!func.scope || func.scope.get()->scopeName != scope.scopeName)
         continue;
 
-      const auto entry = func.entry;
-      std::string functionDefinition = func.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+      const auto& entry = func.entry;
+      std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
       functionDefinition.pop_back();
 
       output_file << "<h3 id=\"f" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
       output_file << "`" << source_name << "`" << MD_NL;
       output_file << H3 << "Description:" << MD_NL << entry.at(ENTRY_COMMENT) << MD_NL;
-
-      if (!entry.at(ENTRY_PARAMS).empty()) {
-        output_file << H3 << "Params:" << MD_NL;
-        output_file << entry.at(ENTRY_PARAMS) << MD_NL;
-      }
-
-      if (!entry.at(ENTRY_RETURNS).empty()) {
-        output_file << H3 << "Returns:" << MD_NL;
-        output_file << entry.at(ENTRY_RETURNS) << MD_NL;
-      }
       output_file << "\n- - -" << MD_NL;
     }
   }
 
 
-  output_file << MD_NL << "<p style=\"font-size : 12;\">Made using <a href=\"https://github.com/SleepiCaffeine/sleepiDOX\">sleepiDOX</a></p>";
+  output_file << MD_NL << "<p style=\"font-size : 10;\">Made using <a href=\"https://github.com/SleepiCaffeine/sleepiDOX\">sleepiDOX</a></p>";
 }
 
 void documentFile(const std::string& directory, std::string destination) {
   std::ifstream rfile = openReadFile(directory);
   Sleepi::DOXContainer entries;
-  std::vector<Sleepi::DOXScope> scopes = isolateEntries(extractFileContent(rfile), entries);
+  //std::vector<Sleepi::DOXScope> scopes = isolateEntries(extractFileContent(rfile), entries);
 
   // Make output in the same destination as input, just with the .md extension
   if (destination.empty()) {
@@ -223,7 +210,35 @@ void documentFile(const std::string& directory, std::string destination) {
   }
 
   std::ofstream outputFile = openWriteFile(destination);
-  generateDocFile(outputFile, entries, scopes);
+  //generateDocFile(outputFile, entries, scopes);
+}
+
+void documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source) {
+  std::sort(scopes.begin(), scopes.end(), compareScopes);
+  std::sort(functions.begin(), functions.end(), compareFunctions);
+
+
+  std::ofstream ofile = openWriteFile(path);
+  generateDocFile(ofile, functions, scopes, "", source);
+
+}
+
+
+void documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
+                          const std::unordered_map<std::string, std::string>& scopeToSourceMap) {
+
+  output_file << "## Table of contents : \n";
+
+  // First print every class/namespace available:
+  for (const Sleepi::DOXScope& scope : scopes) {
+
+    if (scope.scopeName == Sleepi::GLOBAL_SCOPE)
+      continue;
+
+    std::filesystem::path path(scopeToSourceMap.at(scope.scopeName));
+    path.replace_extension(".md");
+    output_file << "- [" << scope.scopeName << "](./" << path.filename().string() << ")\n";
+  }
 }
 
 
@@ -233,6 +248,7 @@ Sleepi::DOXScope& Sleepi::DOXScope::operator=(const DOXScope& scope)
   this->scopeName   = scope.scopeName;
   this->location    = scope.location;
   this->parentScope = scope.parentScope;
+  this->location = scope.location;
 
   return *this;
 }
@@ -246,10 +262,10 @@ Sleepi::DOXFunction& Sleepi::DOXFunction::operator=(const DOXFunction& func)
   return *this;
 }
 
-Sleepi::DOXScope::DOXScope(const std::string_view& name, const std::pair<size_t, size_t> loc) noexcept
+Sleepi::DOXScope::DOXScope(const std::string_view& name, const std::pair<size_t, size_t>& loc) noexcept
   : scopeName{ name }, location{ loc }, parentScope{nullptr}
 { }
 
-Sleepi::DOXFunction::DOXFunction(const std::string name, const DOXEntry& entry) noexcept
-  : name{ name }, entry{ entry }, scope{nullptr}
+Sleepi::DOXFunction::DOXFunction(const std::string_view& name_view, const DOXEntry& entry) noexcept
+  : name{ name_view }, entry{ entry }, scope{ nullptr }, location{ 0, 0 }
 { }

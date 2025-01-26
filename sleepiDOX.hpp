@@ -21,7 +21,15 @@ namespace Sleepi {
     constexpr size_t NoOutputFileSpecified = 0x08;
   };
   
-  const char GLOBAL_SCOPE = '!';
+  const std::string GLOBAL_SCOPE = "!";
+
+  const char logo[] = R"(
+  ____  _                 _ ____   _____  __
+ / ___|| | ___  ___ _ __ (_)  _ \ / _ \ \/ /
+ \___ \| |/ _ \/ _ \ '_ \| | | | | | | \  / 
+  ___) | |  __/  __/ |_) | | |_| | |_| /  \ 
+ |____/|_|\___|\___| .__/|_|____/ \___/_/\_\
+                   |_|)";
 
   /* 
   Reference guide for the different types:
@@ -67,11 +75,11 @@ namespace Sleepi {
   
   struct DOXScope {
     std::string scopeName;
-    std::pair<size_t, size_t> location;           // Should be used as (pos, len)
+    std::pair<size_t, size_t> location;                 // Should be used as (pos, len)
     std::shared_ptr<DOXScope> parentScope{nullptr};     // a linked list... in real life...
 
     ~DOXScope() = default;
-    DOXScope(const std::string_view& name, const std::pair<size_t, size_t> loc) noexcept;
+    DOXScope(const std::string_view& name, const std::pair<size_t, size_t>&  loc) noexcept;
     DOXScope(DOXScope const&) = default;
     DOXScope(DOXScope&&) = default;
     DOXScope& operator=(const DOXScope& other);
@@ -82,9 +90,10 @@ namespace Sleepi {
     std::string name;
     DOXEntry entry;
     std::shared_ptr<DOXScope> scope;
+    std::pair<size_t, size_t> location;    // Use as (pos, len)
 
     ~DOXFunction() = default;
-    DOXFunction(const std::string name, const DOXEntry& entry) noexcept;
+    DOXFunction(const std::string_view& name, const DOXEntry& entry) noexcept;
     DOXFunction(DOXFunction const&) = default;
     DOXFunction(DOXFunction&&) = default;
     DOXFunction& operator=(const DOXFunction& other);
@@ -127,5 +136,7 @@ void validateContext(const Sleepi::DOXContext& context);
 */
 void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "", const std::string_view& source_name = "");
 
+void documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
+  const std::unordered_map<std::string, std::string>& scopeToSourceMap);
 
-void documentFile(const std::string& directory, std::string destination = "");
+void documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source = "");
