@@ -1,0 +1,3 @@
+C:/Users/Vakar/source/repos/sleepiDOX/build/CMakeFiles/sleepiDOX.dir
+C:/Users/Vakar/source/repos/sleepiDOX/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Vakar/source/repos/sleepiDOX/build/CMakeFiles/ZERO_CHECK.dir
