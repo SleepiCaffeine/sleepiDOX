@@ -1,10 +1,10 @@
-#include "RegexFileParser.hpp"
-#include "slpUtility.hpp"
+#include "Headers/RegexFileParser.hpp"
+#include "Headers/slpUtility.hpp"
 #include <fstream>
 #include <sstream>
 
 
-std::vector< std::smatch > getRegexMatches(const std::string& content, const std::string& match) {
+std::vector< std::smatch > Sleepi::getRegexMatches(const std::string& content, const std::string& match) {
   std::regex provided_regex(match);
   std::smatch smatch;
 
@@ -23,7 +23,7 @@ std::vector< std::smatch > getRegexMatches(const std::string& content, const std
   return all_matches;
 }
 
-std::ifstream openReadFile(const std::string_view& fileName)
+std::ifstream Sleepi::openReadFile(const std::string_view& fileName)
 {
   std::ifstream file(fileName.data());
   if (!file) {
@@ -32,14 +32,14 @@ std::ifstream openReadFile(const std::string_view& fileName)
   return file;
 }
 
-std::string extractFileContent(const std::ifstream& file_stream)
+std::string Sleepi::extractFileContent(const std::ifstream& file_stream)
 {
   std::ostringstream oss;
   oss << file_stream.rdbuf();
   return oss.str();
 }
 
-std::ofstream openWriteFile(const std::string_view& fileName)
+std::ofstream Sleepi::openWriteFile(const std::string_view& fileName)
 {
   std::ofstream file(fileName.data());
   if (!file) {
@@ -54,8 +54,7 @@ std::string getline(std::ifstream& file) {
   return rtrim(line);
 }
 
-
-std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent) {
+std::vector<Sleepi::DOXScope> Sleepi::extractScopeMatches(const std::string& fileContent) {
 
   std::vector<Sleepi::DOXScope> all_matches;
   std::smatch smatch;
@@ -120,12 +119,12 @@ std::vector<Sleepi::DOXScope> extractScopeMatches(const std::string& fileContent
 
 }
 
-Sleepi::DOXContainer isolateEntries(const std::string& fileContent) {
+Sleepi::DOXContainer Sleepi::isolateEntries(const std::string& fileContent) {
 
   Sleepi::DOXContainer entries;
   Sleepi::DOXEntry entry;
   const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \n\t]*@sleepiDOX[\s\S]*?\*\/)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
-  const auto functionMatches = getRegexMatches(fileContent, FUNCTION_REGEX);
+  const auto functionMatches = Sleepi::getRegexMatches(fileContent, FUNCTION_REGEX);
   for (const std::smatch& match : functionMatches) {
 
     if (match[1].matched) {
@@ -160,7 +159,7 @@ Sleepi::DOXContainer isolateEntries(const std::string& fileContent) {
   return entries;
 }
 
-std::string getScopeSyntax(const Sleepi::DOXScope& scope) {
+std::string Sleepi::getScopeSyntax(const Sleepi::DOXScope& scope) {
   std::string syntax = scope.scopeName;
   auto _scope = scope.parentScope;
   while (_scope) {
@@ -173,7 +172,7 @@ std::string getScopeSyntax(const Sleepi::DOXScope& scope) {
   return syntax;
 }
 
-void assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleepi::DOXScope>& scopes) {
+void Sleepi::assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleepi::DOXScope>& scopes) {
 
   // Tries to find the last scope that encompasses the function
   // This will end up being the most inner scope, which is saved as the index into the

@@ -8,10 +8,8 @@
 namespace Sleepi {
   constexpr size_t ENTRY_FUNCTION_NAME = 0;
   constexpr size_t ENTRY_COMMENT = 1;
-  constexpr size_t ENTRY_RETURNS = 2;
-  constexpr size_t ENTRY_PARAMS = 3;
-  constexpr size_t ENTRY_FUNCTION_DEFINTION = 4;
-  constexpr size_t ENTRY_FUNCTION_CLASS = 5;
+  constexpr size_t ENTRY_FUNCTION_DEFINTION = 2;
+  constexpr size_t ENTRY_FUNCTION_CLASS = 3;
 
   // Error bits used in `extractArguments`
   namespace ErrorBits {
@@ -58,14 +56,14 @@ namespace Sleepi {
           - Have to sort multiple times
           - Instant access
         2) Only pointer to scope
-          - Can sort entire function list once
+          - Can sort entire function list onceCan you give 
           - Have to loop over whole list for each entry
 
   */
 
 
 
-  using DOXEntry = std::array<std::string, 5>;
+  using DOXEntry = std::array<std::string, 4>;
 
   struct DOXContext {
     std::vector<std::string> sourceDirs;
