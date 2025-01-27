@@ -1,9 +1,9 @@
-#include "sleepiDOX.hpp"
+#include "Headers/sleepiDOX.hpp"
 #include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <algorithm>
-#include "RegexFileParser.hpp"
+#include "Headers/RegexFileParser.hpp"
 
 Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const bool strict) {
   // Possible future flags:
@@ -199,7 +199,7 @@ void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, 
 }
 
 void documentFile(const std::string& directory, std::string destination) {
-  std::ifstream rfile = openReadFile(directory);
+  std::ifstream rfile = Sleepi::openReadFile(directory);
   Sleepi::DOXContainer entries;
   //std::vector<Sleepi::DOXScope> scopes = isolateEntries(extractFileContent(rfile), entries);
 
@@ -209,7 +209,7 @@ void documentFile(const std::string& directory, std::string destination) {
     destination.replace(destination.find_last_of('.'), std::string::npos, ".md");
   }
 
-  std::ofstream outputFile = openWriteFile(destination);
+  std::ofstream outputFile = Sleepi::openWriteFile(destination);
   //generateDocFile(outputFile, entries, scopes);
 }
 
@@ -218,7 +218,7 @@ void documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes
   std::sort(functions.begin(), functions.end(), compareFunctions);
 
 
-  std::ofstream ofile = openWriteFile(path);
+  std::ofstream ofile = Sleepi::openWriteFile(path);
   generateDocFile(ofile, functions, scopes, "", source);
 
 }
