@@ -361,11 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/doxtest.exe
-/sleepiDOX.vcxproj
-/output.md
-/DocTest.hpp
-/DocTest.md
-*.md
-/DocTest.cpp
+.vs/
 /sleepiDOX.vcxproj.filters
