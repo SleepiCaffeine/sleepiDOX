@@ -5,7 +5,7 @@
 #include <algorithm>
 #include "Headers/RegexFileParser.hpp"
 
-Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const bool strict) {
+Sleepi::DOXContext Sleepi::extractArguments(const std::vector<std::string>& argv, const bool strict) {
   // Possible future flags:
   // -xp  :   Would attempt to parse multiple files looking for things like #define's, "using"s, and such to find what things are defined as. [Most likely not]
 
@@ -78,12 +78,12 @@ Sleepi::DOXContext extractArguments(const std::vector<std::string>& argv, const 
   }
 
   if (strict)
-    validateContext(context);
+    Sleepi::validateContext(context);
 
   return context;
 }
 
-void validateContext(const Sleepi::DOXContext& context) {
+void Sleepi::validateContext(const Sleepi::DOXContext& context) {
   namespace Err = Sleepi::ErrorBits;
   const size_t& flags = context.errorFlags;
   
@@ -162,7 +162,7 @@ void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, std:
 
 }
 
-void generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title, const std::string_view& source_name){
+void Sleepi::generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title, const std::string_view& source_name){
 
   using namespace Sleepi;
 
@@ -210,21 +210,66 @@ void documentFile(const std::string& directory, std::string destination) {
   }
 
   std::ofstream outputFile = Sleepi::openWriteFile(destination);
-  //generateDocFile(outputFile, entries, scopes);
+  //generateDocFile(outputFile, scopes, entries);
 }
 
-void documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source) {
+void Sleepi::documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source) {
   std::sort(scopes.begin(), scopes.end(), compareScopes);
   std::sort(functions.begin(), functions.end(), compareFunctions);
 
 
   std::ofstream ofile = Sleepi::openWriteFile(path);
-  generateDocFile(ofile, functions, scopes, "", source);
+  Sleepi::generateDocFile(ofile, functions, scopes, "", source);
 
 }
 
+void Sleepi::documentScope(const std::string& path, const std::string_view& scope_name, Sleepi::DOXContainer& functions) {
+  std::sort(functions.begin(), functions.end(), compareFunctions);
+  std::ofstream ofile = Sleepi::openWriteFile(path);
 
-void documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
+
+  ofile << "# " << scope_name << "\n\n";
+  size_t index = 0;
+  for (const Sleepi::DOXFunction& func : functions) {
+    
+    if (!func.scope || func.scope.get()->scopeName != scope_name)
+      continue;
+
+    ++index;
+
+    std::string functionDefinition = func.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+    functionDefinition.pop_back();
+    // Remove scope, because why would you need one?
+    const std::string scope_syntax = getScopeSyntax(*func.scope);
+    auto pos = functionDefinition.find(scope_syntax);
+    functionDefinition.erase(pos, scope_syntax.length());
+
+    // Markdown really doesn't like these in a header
+    replaceString(functionDefinition, "<", "\\<");
+    replaceString(functionDefinition, ">", "\\>");
+    ofile << "- [" << functionDefinition << "](#f" << index << ")\n";
+  }
+  
+  ofile << "\n- - -\n";
+  index = 0;
+  
+  for (const auto& func : functions) {
+    if (!func.scope || func.scope.get()->scopeName != scope_name)
+      continue;
+    ++index;
+    const auto& entry = func.entry;
+    std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
+    functionDefinition.pop_back();
+
+    ofile << "<h2 id=\"f" << index++ << "\"> " << functionDefinition << "</h3>\n\n";
+    //ofile << "`" << source_name << "`\n\n";
+    ofile << "### Description:\n\n" << entry.at(Sleepi::ENTRY_COMMENT) << "\n\n";
+    ofile << "\n- - -\n\n";
+  }
+}
+
+
+void Sleepi::documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
                           const std::unordered_map<std::string, std::string>& scopeToSourceMap) {
 
   output_file << "## Table of contents : \n";
@@ -241,6 +286,19 @@ void documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi
   }
 }
 
+void Sleepi::documentTableOfScopes(std::ofstream& output_file, const std::unordered_map<std::string, Sleepi::DOXContainer>& scopeToEntriesMap) {
+
+  output_file << "## Table of contents : \n";
+
+  // First print every class/namespace available:
+  for (const auto& [scope_name, funcs] : scopeToEntriesMap) {
+
+    if (scope_name == Sleepi::GLOBAL_SCOPE)
+      continue;
+
+    output_file << "- [" << scope_name << "](./" << scope_name << ".md)\n";
+  }
+}
 
 
 Sleepi::DOXScope& Sleepi::DOXScope::operator=(const DOXScope& scope)

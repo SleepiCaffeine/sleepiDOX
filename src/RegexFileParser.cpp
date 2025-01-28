@@ -62,17 +62,35 @@ std::vector<Sleepi::DOXScope> Sleepi::extractScopeMatches(const std::string& fil
   // Regex that matches classes, class name, and inheritance. Comment could be false due to lack of updates
   // [1] - scope type (class or struct)
   // [2] - scope name
-  // [3] - scope contents
-  std::regex scope_regex(R"((class|struct)\s+([^\d][\w]*)\s*(?::\s*public|private|protected?\s*[^\d][\w]*)?\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\})");
+  std::regex scope_regex(R"((class|struct|namespace)\s+([^\d][\w]*)\s*(?::\s*public|private|protected?\s*[^\d][\w]*)?\s*\{)");
   auto start_iter = fileContent.cbegin();
    
   while (std::regex_search(start_iter, fileContent.cend(), smatch, scope_regex)) {
+    if (!smatch.ready())
+      break;
 
-    if (smatch.ready()) {
-      start_iter = smatch[2].second;                                                 // Iterator is now right after scope name
-      const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);         // This is always non-negative, so later casting to size_t is safe
-      const auto location = std::pair(static_cast<size_t>(pos), smatch[2].length() + smatch[3].length());
-      Sleepi::DOXScope scope( smatch[2].str(), location);
+    // Iterator is now right after scope name
+    start_iter = smatch[2].second; 
+    // This is always non-negative, so later casting to size_t is safe
+    const size_t pos = 
+        static_cast<size_t>(std::distance(fileContent.cbegin(), start_iter));         
+    
+    size_t length     = 1;
+    size_t braceCount = 0;
+    for (size_t i = pos + 1; i < fileContent.size(); ++i) {
+      if (fileContent[i] == '{')
+        ++braceCount;
+      else if (fileContent[i] == '}')
+        --braceCount;
+
+      if (!braceCount)
+        break;
+      ++length;
+    }
+
+
+    const auto location = std::pair(pos, length);
+    Sleepi::DOXScope scope( smatch[2].str(), location);
 
       // Check to see if it belongs in some other scope
       // Only checking one scope "above", because if it's double nested,
@@ -84,30 +102,6 @@ std::vector<Sleepi::DOXScope> Sleepi::extractScopeMatches(const std::string& fil
 
       all_matches.push_back(scope);
     }
-    else break;
-  }
-
-  // Now separately extract namespaces. 
-  scope_regex = std::regex(R"((namespace)\s+([^\d\W]\w*)\s*\{([^{}]*)\})");
-  start_iter = fileContent.cbegin();
-  while (std::regex_search(start_iter, fileContent.cend(), smatch, scope_regex)) {
-    
-    if (smatch.ready()) {
-      start_iter = smatch[1].second;
-      
-      const ptrdiff_t pos = std::distance(fileContent.cbegin(), start_iter);
-      const auto location = std::pair(static_cast<size_t>(pos), smatch[3].length());
-      Sleepi::DOXScope scope{ smatch[2].str(), location};
-
-      if (!all_matches.empty() &&
-        location.first > all_matches.back().location.first) {
-        scope.parentScope = std::make_shared<Sleepi::DOXScope>(all_matches.back());
-      }
-
-      all_matches.push_back(scope);
-    }
-    else break;
-  }
 
   return all_matches;
 
@@ -171,6 +165,7 @@ std::string Sleepi::getScopeSyntax(const Sleepi::DOXScope& scope) {
 
   return syntax;
 }
+
 
 void Sleepi::assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleepi::DOXScope>& scopes) {
 
