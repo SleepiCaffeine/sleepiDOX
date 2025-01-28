@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 namespace Sleepi {
+
   constexpr size_t ENTRY_FUNCTION_NAME = 0;
   constexpr size_t ENTRY_COMMENT = 1;
   constexpr size_t ENTRY_FUNCTION_DEFINTION = 2;
@@ -100,7 +101,7 @@ namespace Sleepi {
 
   using DOXContainer = std::vector<DOXFunction>;
 
-  };
+
 
 /*
 @sleepiDOX Extracts the command-line arguments passed in. The flags are:
@@ -127,14 +128,21 @@ void validateContext(const Sleepi::DOXContext& context);
 /*
 @sleepiDOX Fills the provided file output stream with preformatted documentation text.
 #### Parameters:
-- outputFile : output file stream where this function will write to. Does not perform any validation.
-- entries: hashmap of entries to document.
-- title *(optional)*: Text at the top of the page, at header level 1
-- source_name *(optional)*: filename (or any comment) that will be added next to function descriptions to show which file they come from.
+- `std::ofstream&`                 outputFile : output file stream where this function will write to. Does not perform any validation.
+- `Sleepi::DOXContainer&`          entries    : hashmap of entries to document.
+- `std::vector<Sleepi::DOXScope>&` scopes     :
+- - [OPTIONAL] `const std::string_view&` title       : Text at the top of the page, at header level 1
+- - [OPTIONAL] `const std::string_view&` source_name : filename (or any comment) that will be added next to function descriptions to show which file they come from.
 */
 void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "", const std::string_view& source_name = "");
 
 void documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
   const std::unordered_map<std::string, std::string>& scopeToSourceMap);
 
+void documentTableOfScopes(std::ofstream& output_file, const std::unordered_map<std::string, Sleepi::DOXContainer>& scopeToEntriesMap);
+
 void documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source = "");
+
+void documentScope(const std::string& path, const std::string_view& scope_name, Sleepi::DOXContainer& functions);
+
+  };
