@@ -49,8 +49,6 @@ void HandleContext(const Sleepi::DOXContext& context) {
           scopeToEntriesMap[scope.scopeName].push_back(function);
       }
     }
-
-    
   }
 
   if (context.outputFileDir.empty()) {

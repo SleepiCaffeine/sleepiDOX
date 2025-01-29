@@ -46,23 +46,9 @@ namespace Sleepi {
     - DOXFunction saves information about a specific function definition,
         mainly name, and comments.
 
-    - DOXContainer is a vector of functions. DOXScopes use this to know which functions belong to it.
-        The reason this is done is so the functions belonging to a specific scope could be immediately
-        pushed to the output file, rather than requiring to loop over every function found within that file
-        and checking whether each function belongs to that class.
-        Although that's not a terrible idea....
-
-        Both strategies:
-        1) Each scope stores its own function:
-          - Have to sort multiple times
-          - Instant access
-        2) Only pointer to scope
-          - Can sort entire function list onceCan you give 
-          - Have to loop over whole list for each entry
+    - DOXContainer is a vector of functions.
 
   */
-
-
 
   using DOXEntry = std::array<std::string, 4>;
 
@@ -131,18 +117,34 @@ void validateContext(const Sleepi::DOXContext& context);
 - `std::ofstream&`                 outputFile : output file stream where this function will write to. Does not perform any validation.
 - `Sleepi::DOXContainer&`          entries    : hashmap of entries to document.
 - `std::vector<Sleepi::DOXScope>&` scopes     :
-- - [OPTIONAL] `const std::string_view&` title       : Text at the top of the page, at header level 1
-- - [OPTIONAL] `const std::string_view&` source_name : filename (or any comment) that will be added next to function descriptions to show which file they come from.
+- [OPTIONAL] `const std::string_view&` title       : Text at the top of the page, at header level 1
+- [OPTIONAL] `const std::string_view&` source_name : filename (or any comment) that will be added next to function descriptions to show which file they come from.
+
+[SIDE EFFECT] `entries` will be sorted alphabetically after this function!
+[SIDE EFFECT] `scopes` will be sorted alphabetically after this function!
 */
 void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "", const std::string_view& source_name = "");
 
-void documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
-  const std::unordered_map<std::string, std::string>& scopeToSourceMap);
+/*
+@sleepiDOX Fills a file with headers that link to namespace files
+#### Parameters:
+- `std::ofstream&` outputFile : output file stream, which will be populated with header entries
+- `const std::unordered_map<std::string, Sleepi::DOXContainer>&` scopeToEntriesMap : map of scope names to a vector of Sleepi::DOXFunctions, used to determine what namespaces should be added as headers
+*/
+void documentTableOfScopes(std::ofstream& outputFile, const std::unordered_map<std::string, Sleepi::DOXContainer>& scopeToEntriesMap);
 
-void documentTableOfScopes(std::ofstream& output_file, const std::unordered_map<std::string, Sleepi::DOXContainer>& scopeToEntriesMap);
+/*
+@sleepiDOX
+Creates a file `../executable_dir/path` and documents every function that has a parent scope of `scopeName`.
 
-void documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source = "");
+Functions that are nested, for example int my_func() in namespace Foo::Bar will only be documented in Bar.md, but will be shown as `int Foo::Bar::my_func()`.
+#### Parameters:
+- `const std::string&` path : path to the output file, either relative to the executable or absolute.
+- `const std::string_view&` scopeName : name of the scope that should be documented.
+- `Sleepi::DOXContainer&` functions   : vector of functions to possibly document.
 
-void documentScope(const std::string& path, const std::string_view& scope_name, Sleepi::DOXContainer& functions);
+[SIDE EFFECT] `functions` will be sorted alphabetically after this function!
+*/
+void documentScope(const std::string& path, const std::string_view& scopeName, Sleepi::DOXContainer& functions);
 
-  };
+};

@@ -5,7 +5,7 @@
 #include "sleepiDOX.hpp"
 
 
-
+// namspace BUG {
 namespace Sleepi {
 
 /*
@@ -46,3 +46,4 @@ void assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleep
 std::string getline(std::ifstream& file);
 
 };
+// }

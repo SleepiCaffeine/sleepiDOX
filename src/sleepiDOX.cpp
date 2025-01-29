@@ -5,12 +5,39 @@
 #include <algorithm>
 #include "Headers/RegexFileParser.hpp"
 
+
+// ============= Utility =============
+
+std::string replaceString(std::string& source, const std::string_view& search, const std::string_view& replace ) {
+  std::string::size_type pos = 0;
+  while ( (pos = source.find(search, pos)) != std::string::npos) {
+  source.replace(pos, search.length(), replace);
+  pos += replace.size();
+  }
+  return source;
+}
+
+// False - lhs is first
+// True - rhs is first, or they're the same
+bool alphabeticalCompare(const std::string_view& lhs, const std::string_view& rhs) {
+  return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+}
+
+bool compareScopes(const Sleepi::DOXScope& lhs, const Sleepi::DOXScope& rhs) noexcept {
+  return alphabeticalCompare(lhs.scopeName, rhs.scopeName);
+}
+bool compareFunctions(const Sleepi::DOXFunction& lhs, const Sleepi::DOXFunction& rhs) noexcept {
+  return alphabeticalCompare(lhs.name, rhs.name);
+}
+
+// ============= Namespace Methods =============
+
 Sleepi::DOXContext Sleepi::extractArguments(const std::vector<std::string>& argv, const bool strict) {
   // Possible future flags:
   // -xp  :   Would attempt to parse multiple files looking for things like #define's, "using"s, and such to find what things are defined as. [Most likely not]
 
   namespace sErr = Sleepi::ErrorBits;
-  Sleepi::DOXContext context =  { {}, "", 0};
+  Sleepi::DOXContext context = { {}, "", 0 };
 
   // Looping up to .size() - 1, because every flag has to have a second string afterward
   for (size_t index = 1; index < argv.size() - 1; index += 2) {
@@ -45,7 +72,7 @@ Sleepi::DOXContext Sleepi::extractArguments(const std::vector<std::string>& argv
 
       // Loop through every file in the directory
       for (const auto& directory_entry : fs::directory_iterator(inputDirPath)) {
-        
+
         // Ignore every file that isn't a "regular" aka text file
         if (!directory_entry.is_regular_file())
           continue;
@@ -62,16 +89,16 @@ Sleepi::DOXContext Sleepi::extractArguments(const std::vector<std::string>& argv
     }
   }
 
-   // Commented because new default behavior will now extract each file separately
-   // Will remove after a stable version
-   /* if (context.outputFileDir.empty())
-    context.errorFlags |= sErr::NoOutputFileSpecified;*/
+  // Commented because new default behavior will now extract each file separately
+  // Will remove after a stable version
+  /* if (context.outputFileDir.empty())
+   context.errorFlags |= sErr::NoOutputFileSpecified;*/
 
-  // If the -fs flag was not specified, and the input is still empty
-  // This means that no input was provided at all.
+   // If the -fs flag was not specified, and the input is still empty
+   // This means that no input was provided at all.
 
-  // This could've been done with some sort of bool like:
-  // `bool inputProvided = false;` but eh, doesn't really change much
+   // This could've been done with some sort of bool like:
+   // `bool inputProvided = false;` but eh, doesn't really change much
   if ((context.errorFlags & sErr::NoInputFilesFound) == 0
     && context.sourceDirs.empty()) {
     context.errorFlags |= sErr::NoInputSpecified;
@@ -86,10 +113,10 @@ Sleepi::DOXContext Sleepi::extractArguments(const std::vector<std::string>& argv
 void Sleepi::validateContext(const Sleepi::DOXContext& context) {
   namespace Err = Sleepi::ErrorBits;
   const size_t& flags = context.errorFlags;
-  
+
 
   if (flags & Err::InputDirDoesntExist)
-    throw std::system_error( std::error_code(), "The provided input directory does not exist.");
+    throw std::system_error(std::error_code(), "The provided input directory does not exist.");
   if (flags & Err::NoInputFilesFound)
     throw std::system_error(std::error_code(), "The program was unable to find the file(s) specified.");
   if (flags & Err::NoInputSpecified)
@@ -97,28 +124,6 @@ void Sleepi::validateContext(const Sleepi::DOXContext& context) {
   if (flags & Err::NoOutputFileSpecified)
     throw std::logic_error("No output flag provided. Use the flag -d to provide the destination.");
 
-}
-
-std::string replaceString(std::string& source, const std::string_view& search, const std::string_view& replace ) {
-  std::string::size_type pos = 0;
-  while ( (pos = source.find(search, pos)) != std::string::npos) {
-  source.replace(pos, search.length(), replace);
-  pos += replace.size();
-  }
-  return source;
-}
-
-// False - lhs is first
-// True - rhs is first, or they're the same
-bool alphabeticalCompare(const std::string_view& lhs, const std::string_view& rhs) {
-  return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
-}
-
-bool compareScopes(const Sleepi::DOXScope& lhs, const Sleepi::DOXScope& rhs) noexcept {
-  return alphabeticalCompare(lhs.scopeName, rhs.scopeName);
-}
-bool compareFunctions(const Sleepi::DOXFunction& lhs, const Sleepi::DOXFunction& rhs) noexcept {
-  return alphabeticalCompare(lhs.name, rhs.name);
 }
 
 void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "") {
@@ -198,31 +203,6 @@ void Sleepi::generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& e
   output_file << MD_NL << "<p style=\"font-size : 10;\">Made using <a href=\"https://github.com/SleepiCaffeine/sleepiDOX\">sleepiDOX</a></p>";
 }
 
-void documentFile(const std::string& directory, std::string destination) {
-  std::ifstream rfile = Sleepi::openReadFile(directory);
-  Sleepi::DOXContainer entries;
-  //std::vector<Sleepi::DOXScope> scopes = isolateEntries(extractFileContent(rfile), entries);
-
-  // Make output in the same destination as input, just with the .md extension
-  if (destination.empty()) {
-    destination = directory;
-    destination.replace(destination.find_last_of('.'), std::string::npos, ".md");
-  }
-
-  std::ofstream outputFile = Sleepi::openWriteFile(destination);
-  //generateDocFile(outputFile, scopes, entries);
-}
-
-void Sleepi::documentFile(const std::string& path, std::vector<Sleepi::DOXScope>& scopes, Sleepi::DOXContainer& functions, const std::string_view& source) {
-  std::sort(scopes.begin(), scopes.end(), compareScopes);
-  std::sort(functions.begin(), functions.end(), compareFunctions);
-
-
-  std::ofstream ofile = Sleepi::openWriteFile(path);
-  Sleepi::generateDocFile(ofile, functions, scopes, "", source);
-
-}
-
 void Sleepi::documentScope(const std::string& path, const std::string_view& scope_name, Sleepi::DOXContainer& functions) {
   std::sort(functions.begin(), functions.end(), compareFunctions);
   std::ofstream ofile = Sleepi::openWriteFile(path);
@@ -230,7 +210,7 @@ void Sleepi::documentScope(const std::string& path, const std::string_view& scop
 
   ofile << "# " << scope_name << "\n\n";
   size_t index = 0;
-  for (const Sleepi::DOXFunction& func : functions) {
+  for (Sleepi::DOXFunction& func : functions) {
     
     if (!func.scope || func.scope.get()->scopeName != scope_name)
       continue;
@@ -256,33 +236,22 @@ void Sleepi::documentScope(const std::string& path, const std::string_view& scop
   for (const auto& func : functions) {
     if (!func.scope || func.scope.get()->scopeName != scope_name)
       continue;
+
     ++index;
+
     const auto& entry = func.entry;
     std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
     functionDefinition.pop_back();
 
-    ofile << "<h2 id=\"f" << index++ << "\"> " << functionDefinition << "</h3>\n\n";
+
+    // Replace with different tokens for HTML syntax
+    replaceString(functionDefinition, "<", "&lt");
+    replaceString(functionDefinition, ">", "&gt");
+
+    ofile << "<h2 id=\"f" << index << "\"> " << functionDefinition << "</h2>\n\n";
     //ofile << "`" << source_name << "`\n\n";
     ofile << "### Description:\n\n" << entry.at(Sleepi::ENTRY_COMMENT) << "\n\n";
     ofile << "\n- - -\n\n";
-  }
-}
-
-
-void Sleepi::documentTableOfEntries(std::ofstream& output_file, const std::vector<Sleepi::DOXScope>& scopes,
-                          const std::unordered_map<std::string, std::string>& scopeToSourceMap) {
-
-  output_file << "## Table of contents : \n";
-
-  // First print every class/namespace available:
-  for (const Sleepi::DOXScope& scope : scopes) {
-
-    if (scope.scopeName == Sleepi::GLOBAL_SCOPE)
-      continue;
-
-    std::filesystem::path path(scopeToSourceMap.at(scope.scopeName));
-    path.replace_extension(".md");
-    output_file << "- [" << scope.scopeName << "](./" << path.filename().string() << ")\n";
   }
 }
 
@@ -300,6 +269,9 @@ void Sleepi::documentTableOfScopes(std::ofstream& output_file, const std::unorde
   }
 }
 
+
+
+// ========== Struct stuff ==========
 
 Sleepi::DOXScope& Sleepi::DOXScope::operator=(const DOXScope& scope)
 {
