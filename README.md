@@ -47,7 +47,9 @@ After running `sleepiDOX.exe -f example.hpp` would produce [this](/Examples/Basi
 
 <br>
 <br>
+
 Another example of how files are created is demostrated here
+
 <br>
 <br>
 
@@ -101,7 +103,7 @@ C:
 - Build and Run
 <br>
 <br>
-<br>
+
 #### CMAKE
 Move current directory to the `build` folder
 ```
@@ -116,7 +118,9 @@ On windows `build` should now contain 3 solutions. Set `sleepiDOX.sln` as startu
 On Unix it should generate a `make` file which you can run in the terminal. *(Untested)*
 <br>
 <br>
+
 - - -
+
 ### Flags
 
 Flags can be appended in any order, and depending on the flag - with or without an additional argument.
@@ -134,6 +138,8 @@ If no [DIRECTORY] is provided, it will default to the executable's directory.
 - - Either `-fs` or `-f` is required for the program to work.
 <br>
 <br>
+
 - - -
+
 ### Contributing
 sure go ahead
