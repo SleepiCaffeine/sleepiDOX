@@ -92,16 +92,45 @@ std::vector<Sleepi::DOXScope> Sleepi::extractScopeMatches(const std::string& fil
     const auto location = std::pair(pos, length);
     Sleepi::DOXScope scope( smatch[2].str(), location);
 
-      // Check to see if it belongs in some other scope
-      // Only checking one scope "above", because if it's double nested,
-      // then the parent will have the highest scope saved already
-      if (!all_matches.empty() &&
-          location.first > all_matches.back().location.first && location.second < all_matches.back().location.second) {
-        scope.parentScope = std::make_shared<Sleepi::DOXScope>(all_matches.back());
-      }
+    if (smatch[1] == "class")
+      scope.type = ScopeType::Class;
 
-      all_matches.push_back(scope);
+    else if (smatch[1] == "struct")
+      scope.type = ScopeType::Struct;
+
+    else if (smatch[1] == "namespace")
+      scope.type = ScopeType::Namespace;
+
+    all_matches.push_back(scope);
+
+
+    // Re-read each scope location, and check to see which is the closest parent scope:
+    // This will never be a performance bottleneck, so I don't mind this quadratic loop
+    size_t last_scope_pos = 0;
+
+    for (const auto& _scope : all_matches) {
+      // just ignore same one
+      if (_scope.scopeName == scope.scopeName)
+        continue;
+
+      // Check to see if this scope is inside another
+      if (scope.location.first < _scope.location.first)
+        continue;
+
+      // Since it's impossible for a scope to start in one, and end outside of it. Ends will not be checked
+      // Instead, it will be a choice between the "closest" scope.
+
+      if (_scope.location.first > last_scope_pos) {
+        scope.parentScope = std::make_shared<Sleepi::DOXScope>(_scope);
+        last_scope_pos = _scope.location.first;
+      }
     }
+
+
+  }
+
+
+
 
   return all_matches;
 
@@ -117,12 +146,12 @@ Sleepi::DOXContainer Sleepi::isolateEntries(const std::string& fileContent) {
 
   Sleepi::DOXContainer entries;
   Sleepi::DOXEntry entry;
-  const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \n\t]*@sleepiDOX[\s\S]*?\*\/)|(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?\s*;))";
+  const char* FUNCTION_REGEX = R"((\/\/[ \t]*@sleepiDOX[^\n]*\n?|\/\*[ \n\t]*@sleepiDOX[\s\S]*?\*\/)\s*(^[ \t]*[a-zA-Z_][\w\s:<>,*&]*\s+([a-zA-Z_]\w*)\s*\([\s\S]*?\)\s*(const)?\s*(noexcept)?))";
   const auto functionMatches = Sleepi::getRegexMatches(fileContent, FUNCTION_REGEX);
   for (const std::smatch& match : functionMatches) {
 
     if (match[1].matched) {
-      entry.at(Sleepi::ENTRY_COMMENT) += commentTrim(match[1].str(), "@sleepiDOX");
+      entry.at(Sleepi::ENTRY_COMMENT) = commentTrim(match[1].str(), "@sleepiDOX");
     }
     if (match[2].matched) {
 
@@ -165,7 +194,6 @@ std::string Sleepi::getScopeSyntax(const Sleepi::DOXScope& scope) {
 
   return syntax;
 }
-
 
 void Sleepi::assignParentScopes(Sleepi::DOXContainer& functions, const std::vector<Sleepi::DOXScope>& scopes) {
 
