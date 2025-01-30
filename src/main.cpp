@@ -40,7 +40,9 @@ void HandleContext(const Sleepi::DOXContext& context) {
 
 
     Sleepi::assignParentScopes(file_entries, file_scopes);
-    scopes.insert(scopes.cend(), file_scopes.cbegin(), file_scopes.cend());
+    entries.insert(entries.end(), file_entries.cbegin(), file_entries.cend());
+    scopes.insert(scopes.end(), file_scopes.cbegin(), file_scopes.cend());
+   
 
     // Append entries as neccesary
     for (const auto& scope : file_scopes) {
@@ -50,7 +52,11 @@ void HandleContext(const Sleepi::DOXContext& context) {
       }
     }
   }
+  // debug area
+  volatile int n = 5;
+  (void)n;
 
+  // If no -d flag was specified (or specified with no argument)
   if (context.outputFileDir.empty()) {
     for (auto& [scope_name, funcs] : scopeToEntriesMap) {
       if (scope_name == Sleepi::GLOBAL_SCOPE)
@@ -61,14 +67,11 @@ void HandleContext(const Sleepi::DOXContext& context) {
     std::ofstream ofile = Sleepi::openWriteFile("TableOfEntries.md");
     Sleepi::documentTableOfScopes(ofile, scopeToEntriesMap);
   }
-
-  // Either generate a separate Table of Contents file for easier navigation
-  // Or simply push everything into one file
   
   // Makes a single file with the entire table of entries, and every entry all in one
-  if (!context.outputFileDir.empty()) {
+  else {
     std::ofstream output_file = Sleepi::openWriteFile(context.outputFileDir);
-    Sleepi::generateDocFile(output_file, entries, scopes, "", "");
+    Sleepi::generateDocFile(output_file, scopeToEntriesMap, "", "");
   }
 
 

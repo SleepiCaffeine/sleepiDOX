@@ -19,7 +19,7 @@ bool containsInOrder(const std::string& str, const std::string_view& chars) {
 // trim from end
 std::string rtrim(const std::string_view& s) {
   std::string copy{ s };
-  const size_t pos = copy.find_last_not_of(" w\t\f\v\r\n") + 1;
+  const size_t pos = copy.find_last_not_of(" \t\f\v\r\n") + 1;
   if (pos >= copy.size())
   return copy;
   return copy.erase(pos);
@@ -27,7 +27,7 @@ std::string rtrim(const std::string_view& s) {
 // trim from start
 std::string ltrim(const std::string_view& s) {
   std::string copy{ s };
-  return copy.erase(0, copy.find_first_not_of(" w\t\f\v\r\n"));
+  return copy.erase(0, copy.find_first_not_of(" \t\f\v\r\n"));
 }
 
 std::string rltrim(const std::string_view& str) {

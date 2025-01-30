@@ -30,6 +30,10 @@ bool compareFunctions(const Sleepi::DOXFunction& lhs, const Sleepi::DOXFunction&
   return alphabeticalCompare(lhs.name, rhs.name);
 }
 
+bool cmpMapVec(const std::pair <std::string, std::vector<Sleepi::DOXFunction> >& lhs, const std::pair <std::string, std::vector<Sleepi::DOXFunction> >& rhs) noexcept {
+  return alphabeticalCompare(lhs.first, rhs.first);
+}
+
 // ============= Namespace Methods =============
 
 Sleepi::DOXContext Sleepi::extractArguments(const std::vector<std::string>& argv, const bool strict) {
@@ -126,7 +130,7 @@ void Sleepi::validateContext(const Sleepi::DOXContext& context) {
 
 }
 
-void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "") {
+void generateTOE(std::ofstream& output_file, Sleepi::DOXHashMap& map, const std::string_view& title = "") {
   
   if (!title.empty())
     output_file << "# " << title << "\n\n";
@@ -134,40 +138,64 @@ void generateTOE(std::ofstream& output_file, Sleepi::DOXContainer& entries, std:
   output_file << "## Table of contents : \n";
   size_t index = 1;
 
-  // First print every class/namespace available:
-  for (const Sleepi::DOXScope& scope : scopes) {
-    output_file << "- [" << scope.scopeName << "](#" << index++ << ")\n";
-  } output_file << "\n- - -\n";
+  // Convert to a vector so it could be sorted
+
+  Sleepi::_DOXScopeVector mapVector(map.size());
+  for (auto& [scope, functions] : map) {
+    std::sort(functions.begin(), functions.end(), compareFunctions);
+    mapVector.emplace_back(scope, functions);
+  }
+
+  // Sort the map vector by scope name
+  // std::ranges::sort(mapVector, std::less{}, &std::pair::first); Look into projections
+  std::sort(mapVector.begin(), mapVector.end(), cmpMapVec);
+
+
+  // First print almost every class/namespace available:
+  for (const auto& [scopeName, functions] : map) {
+    // Ignore global scope or namespaces with no documentation
+    if (scopeName == Sleepi::GLOBAL_SCOPE || functions.empty())
+      continue;
+
+    output_file << "- [" << scopeName << "](#" << index << ")\n";
+    ++index;
+  }
   
-  index = 0;
+  output_file << "\n- - -\n";
+  
+  index = 1;
   // Now for each class, add all of their function links:
-  for (const Sleepi::DOXScope& scope : scopes) {
+  for (const auto& [scopeName, functions] : map) {
+    // Ignore global scope or namespaces with no documentation
+    if (scopeName == Sleepi::GLOBAL_SCOPE || functions.empty())
+      continue;
+      
+    output_file << "<h3 id=" << index << ">" << scopeName << "</h3>\n\n";
     
-    output_file << "### " << scope.scopeName << "\n\n";
-    
-    for (const Sleepi::DOXFunction& func : entries) {
-      ++index;
-      if (!func.scope || func.scope.get()->scopeName != scope.scopeName)
+    for (const Sleepi::DOXFunction& func : functions) {
+      
+      if (!func.scope || func.scope.get()->scopeName != scopeName)
         continue;
 
-
       std::string functionDefinition = func.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
-      functionDefinition.pop_back();
+
       // Remove scope, because why would you need one?
-      const std::string scope_syntax = getScopeSyntax(scope);
-      auto pos = functionDefinition.find( getScopeSyntax(scope) );
+      const std::string scope_syntax = getScopeSyntax(*func.scope);
+      auto pos = functionDefinition.find(scope_syntax);
       functionDefinition.erase(pos, scope_syntax.length());
 
       // Markdown really doesn't like these in a header
       replaceString(functionDefinition, "<", "\\<");
       replaceString(functionDefinition, ">", "\\>");
+
       output_file << "- [" << functionDefinition << "](#f" << index << ")\n";
+      ++index;
     }
   } output_file << "\n- - -\n";
 
 }
 
-void Sleepi::generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title, const std::string_view& source_name){
+void Sleepi::generateDocFile(std::ofstream& output_file, Sleepi::DOXHashMap& map, const std::string_view& title, const std::string_view& source_name){
 
   using namespace Sleepi;
 
@@ -178,22 +206,25 @@ void Sleepi::generateDocFile(std::ofstream& output_file, Sleepi::DOXContainer& e
   constexpr char H3[] = "### ";
 
 
-  generateTOE(output_file, entries, scopes, title);
+  generateTOE(output_file, map, title);
+  output_file.flush();
 
-  size_t index = 0;
-  for (const auto& scope : scopes)
+  size_t index = 1;
+  for (const auto& [scopeName, funcs] : map)
   {
-    for (const auto& func : entries) {
-      ++index;
-      if (!func.scope || func.scope.get()->scopeName != scope.scopeName)
-        continue;
+    if (scopeName == Sleepi::GLOBAL_SCOPE || funcs.empty()) 
+      continue;
 
+    for (const auto& func : funcs) {
+     
       const auto& entry = func.entry;
       std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
-      functionDefinition.pop_back();
 
-      output_file << "<h3 id=\"f" << index++ << "\"> " << functionDefinition << "</h3>" << MD_NL;
-      output_file << "`" << source_name << "`" << MD_NL;
+      replaceString(functionDefinition, "<", "&lt");
+      replaceString(functionDefinition, ">", "&gt");
+
+      output_file << "<h3 id=\"f" << index << "\"> " << functionDefinition << "</h3>" << MD_NL;
+      ++index;
       output_file << H3 << "Description:" << MD_NL << entry.at(ENTRY_COMMENT) << MD_NL;
       output_file << "\n- - -" << MD_NL;
     }
@@ -209,16 +240,13 @@ void Sleepi::documentScope(const std::string& path, const std::string_view& scop
 
 
   ofile << "# " << scope_name << "\n\n";
-  size_t index = 0;
+  size_t index = 1;
   for (Sleepi::DOXFunction& func : functions) {
     
     if (!func.scope || func.scope.get()->scopeName != scope_name)
       continue;
 
-    ++index;
-
     std::string functionDefinition = func.entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
-    functionDefinition.pop_back();
     // Remove scope, because why would you need one?
     const std::string scope_syntax = getScopeSyntax(*func.scope);
     auto pos = functionDefinition.find(scope_syntax);
@@ -228,20 +256,18 @@ void Sleepi::documentScope(const std::string& path, const std::string_view& scop
     replaceString(functionDefinition, "<", "\\<");
     replaceString(functionDefinition, ">", "\\>");
     ofile << "- [" << functionDefinition << "](#f" << index << ")\n";
+    ++index;
   }
   
   ofile << "\n- - -\n";
-  index = 0;
+  index = 1;
   
   for (const auto& func : functions) {
     if (!func.scope || func.scope.get()->scopeName != scope_name)
       continue;
 
-    ++index;
-
     const auto& entry = func.entry;
     std::string functionDefinition = entry.at(Sleepi::ENTRY_FUNCTION_DEFINTION);
-    functionDefinition.pop_back();
 
 
     // Replace with different tokens for HTML syntax
@@ -249,6 +275,7 @@ void Sleepi::documentScope(const std::string& path, const std::string_view& scop
     replaceString(functionDefinition, ">", "&gt");
 
     ofile << "<h2 id=\"f" << index << "\"> " << functionDefinition << "</h2>\n\n";
+    ++index;
     //ofile << "`" << source_name << "`\n\n";
     ofile << "### Description:\n\n" << entry.at(Sleepi::ENTRY_COMMENT) << "\n\n";
     ofile << "\n- - -\n\n";
@@ -279,6 +306,7 @@ Sleepi::DOXScope& Sleepi::DOXScope::operator=(const DOXScope& scope)
   this->location    = scope.location;
   this->parentScope = scope.parentScope;
   this->location = scope.location;
+  this->type = scope.type;
 
   return *this;
 }
@@ -293,7 +321,7 @@ Sleepi::DOXFunction& Sleepi::DOXFunction::operator=(const DOXFunction& func)
 }
 
 Sleepi::DOXScope::DOXScope(const std::string_view& name, const std::pair<size_t, size_t>& loc) noexcept
-  : scopeName{ name }, location{ loc }, parentScope{nullptr}
+  : scopeName{ name }, location{ loc }, parentScope{ nullptr }, type{ScopeType::NONE}
 { }
 
 Sleepi::DOXFunction::DOXFunction(const std::string_view& name_view, const DOXEntry& entry) noexcept

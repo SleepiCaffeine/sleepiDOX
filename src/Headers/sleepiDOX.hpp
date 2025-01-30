@@ -19,6 +19,13 @@ namespace Sleepi {
     constexpr size_t NoInputFilesFound = 0x04;
     constexpr size_t NoOutputFileSpecified = 0x08;
   };
+
+  const enum class ScopeType {
+    Namespace,
+    Struct,
+    Class,
+    NONE
+  };
   
   const std::string GLOBAL_SCOPE = "!";
 
@@ -62,6 +69,8 @@ namespace Sleepi {
     std::string scopeName;
     std::pair<size_t, size_t> location;                 // Should be used as (pos, len)
     std::shared_ptr<DOXScope> parentScope{nullptr};     // a linked list... in real life...
+    ScopeType type;
+
 
     ~DOXScope() = default;
     DOXScope(const std::string_view& name, const std::pair<size_t, size_t>&  loc) noexcept;
@@ -86,6 +95,8 @@ namespace Sleepi {
   };
 
   using DOXContainer = std::vector<DOXFunction>;
+  using DOXHashMap = std::unordered_map< std::string, std::vector<DOXFunction> >;
+  using _DOXScopeVector = std::vector < std::pair <std::string, std::vector<DOXFunction> > >;
 
 
 
@@ -115,15 +126,13 @@ void validateContext(const Sleepi::DOXContext& context);
 @sleepiDOX Fills the provided file output stream with preformatted documentation text.
 #### Parameters:
 - `std::ofstream&`                 outputFile : output file stream where this function will write to. Does not perform any validation.
-- `Sleepi::DOXContainer&`          entries    : hashmap of entries to document.
-- `std::vector<Sleepi::DOXScope>&` scopes     :
+- `Sleepi::DOXHashMap&`                   map : map of scope names to a vector of `Sleepi::DOXFunctions` that are within that namespace          
 - [OPTIONAL] `const std::string_view&` title       : Text at the top of the page, at header level 1
 - [OPTIONAL] `const std::string_view&` source_name : filename (or any comment) that will be added next to function descriptions to show which file they come from.
 
-[SIDE EFFECT] `entries` will be sorted alphabetically after this function!
-[SIDE EFFECT] `scopes` will be sorted alphabetically after this function!
+[SIDE EFFECT] `map` will have all of its keys' vectors sorted alphabetically 
 */
-void generateDocFile(std::ofstream& outputFile, Sleepi::DOXContainer& entries, std::vector<Sleepi::DOXScope>& scopes, const std::string_view& title = "", const std::string_view& source_name = "");
+void generateDocFile(std::ofstream& outputFile, Sleepi::DOXHashMap& map, const std::string_view& title = "", const std::string_view& source_name = "");
 
 /*
 @sleepiDOX Fills a file with headers that link to namespace files
